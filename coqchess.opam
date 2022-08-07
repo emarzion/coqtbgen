@@ -1,0 +1,25 @@
+opam-version: "2.0"
+maintainer: "emarzion@gmail.com"
+version: "dev"
+
+homepage: "https://github.com/emarzion/coqchess"
+dev-repo: "git+https://github.com/emarzion/coqchess.git"
+bug-reports: "https://github.com/emarzion/coqchess/issues"
+license: "GPL"
+
+synopsis: "Coq implementation of chess"
+
+build: [
+  ["./configure.sh"]
+  [make "-j%{jobs}%"]
+]
+install: [make "install"]
+
+depends: [
+  "ocaml" {= "4.14.0"}
+  "coq" {(= "8.15.2")}
+]
+
+authors: [
+  "Evan Marzion"
+]
