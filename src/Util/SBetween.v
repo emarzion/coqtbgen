@@ -1,4 +1,4 @@
-Require Import CoqChess.Util.Rel.
+Require Import Games.Util.Rel.
 
 Definition sbetween : Rel 3 nat :=
   fun x y z =>

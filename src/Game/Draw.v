@@ -1,7 +1,7 @@
-Require Import CoqChess.Game.Game.
-Require Import CoqChess.Game.Player.
-Require Import CoqChess.Game.Strategy.
-Require Import CoqChess.Game.Win.
+Require Import Games.Game.Game.
+Require Import Games.Game.Player.
+Require Import Games.Game.Strategy.
+Require Import Games.Game.Win.
 
 CoInductive draw {G : Game} : GameState G -> Type :=
   | atom_draw : forall s,

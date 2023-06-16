@@ -3,80 +3,70 @@ Require Import List.
 Import ListNotations.
 Require Import Lia.
 
-Require Import CoqChess.Util.Rel.
-Require Import CoqChess.Util.Dist.
-Require Import CoqChess.Util.SBetween.
-Require Import CoqChess.Util.Dec.
-Require Import CoqChess.Util.UIP.
+Require Import Games.Util.Rel.
+Require Import Games.Util.Dist.
+Require Import Games.Util.SBetween.
+Require Import Games.Util.Dec.
+Require Import Games.Util.UIP.
 
-Definition Fin (n : nat) : Type :=
-  { x : nat & x < n }.
+Fixpoint Fin n : Type :=
+  match n with
+  | 0 => Empty_set
+  | S m => unit + Fin m
+  end.
 
-Definition val : forall {n}, Fin n -> nat :=
-  fun n => @projT1 nat (fun x => x < n).
+Fixpoint Fin_of_nat {m} (n : nat) : Fin (n + S m) :=
+  match n with
+  | 0 => inl tt
+  | S k => inr (Fin_of_nat k)
+  end.
 
-Definition val_small : forall {n} (i : Fin n), val i < n :=
-  fun n => @projT2 nat (fun x => x < n).
+Fixpoint val {n} : Fin n -> nat :=
+  match n with
+  | 0 => fun e =>
+    match e with
+    end
+  | S m => fun i =>
+    match i with
+    | inl tt => 0
+    | inr j => S (val j)
+    end
+  end.
+
+(* Definition val_small : forall {n} (i : Fin n), val i < n :=
+  fun n => @projT2 nat (fun x => x < n). *)
 
 Lemma val_inj : forall {n} (i j : Fin n),
   val i = val j -> i = j.
 Proof.
   induction n; intros.
-  { destruct i; lia. }
-  { destruct i,j; simpl in *.
-    destruct H.
-    f_equal; apply UIP.
+  { destruct i. }
+  { destruct i as [[]|i'];
+    destruct j as [[]|j'].
+    { reflexivity. }
+    { discriminate. }
+    { discriminate. }
+    { rewrite (IHn i' j').
+      { reflexivity. }
+      { now inversion H. }
+    }
   }
 Qed.
-
-Definition Fin_0 {n} : Fin (S n).
-Proof.
-  exists 0.
-  lia.
-Defined.
-
-Definition Fin_S {n} : Fin n -> Fin (S n).
-Proof.
-  intros [i Hi].
-  exists (S i).
-  lia.
-Defined.
-
-Definition Fin_case {n} : forall (i : Fin (S n)),
-  (i = Fin_0) + {j : Fin n & i = Fin_S j}.
-Proof.
-  intro i.
-  destruct (val i) eqn:?.
-  - left.
-    apply val_inj; auto.
-  - right.
-    destruct i as [i Hi].
-    destruct i.
-    + discriminate.
-    + simpl in *.
-      assert (i < n) as pf by lia.
-      exists (existT _ i pf).
-      apply val_inj.
-      reflexivity.
-Defined.
 
 Fixpoint all_fin n : list (Fin n) :=
   match n with
   | 0 => []
-  | S m => Fin_0 :: List.map Fin_S (all_fin m)
+  | S m => inl tt :: map inr (all_fin m)
   end.
 
 Lemma all_fin_In (n : nat) : forall i : Fin n,
   In i (all_fin n).
 Proof.
   induction n.
-  - intros [n Hn]; lia.
-  - intro i.
-    destruct (Fin_case i).
-    + left; congruence.
+  - intros [].
+  - intros [[]|j].
+    + left; reflexivity.
     + right.
-      destruct s as [j Hj].
-      rewrite Hj.
       apply in_map.
       apply IHn.
 Qed.
@@ -118,19 +108,17 @@ Proof.
   constructor.
   induction n.
   - intros P _.
-    right; intros [[] _]; lia.
+    right; intros [[] _].
   - intros P Pd.
-    destruct (Pd Fin_0).
-    + left; exists Fin_0; auto.
-    + destruct (IHn (fun j => P (Fin_S j))).
-      * intro; apply Pd.
-      * left; destruct e as [j Hj].
-        exists (Fin_S j); auto.
+    destruct (Pd (inl tt)).
+    + left; exists (inl tt); easy.
+    + destruct (IHn (fun i => P (inr i)) (fun i => Pd (inr i))).
+      * left. destruct e as [i Hi].
+        exists (inr i); exact Hi.
       * right; intros [i Hi].
-        destruct (Fin_case i) as [|[j Hj]].
-        ** congruence.
+        destruct i as [[]|j].
+        ** exact (n0 Hi).
         ** apply n1.
-           exists j; congruence.
+           exists j.
+           exact Hi.
 Defined.
-
-

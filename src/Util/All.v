@@ -1,7 +1,7 @@
-Require Export CoqChess.Util.Rel.
-Require Export CoqChess.Util.Dist.
-Require Export CoqChess.Util.Fin.
-Require Export CoqChess.Util.Vec.
-Require Export CoqChess.Util.Mat.
-Require Export CoqChess.Util.Dec.
-Require Export CoqChess.Util.UIP.
+Require Export Games.Util.Rel.
+Require Export Games.Util.Dist.
+Require Export Games.Util.Fin.
+Require Export Games.Util.Vec.
+Require Export Games.Util.Mat.
+Require Export Games.Util.Dec.
+Require Export Games.Util.UIP.

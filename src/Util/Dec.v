@@ -91,7 +91,7 @@ Proof.
   constructor.
   destruct (dec (P := P)); [tauto|].
   destruct (dec (P := Q)); tauto.
-Qed.
+Defined.
 
 #[export]
 Instance le_Dec : forall m n, Dec (m <= n).

@@ -1,4 +1,4 @@
-Require Import CoqChess.Util.All.
+Require Import Games.Util.All.
 
 Inductive Player :=
   | White : Player
@@ -45,4 +45,23 @@ Defined.
 Lemma opp_no_fp : forall p, opp p <> p.
 Proof.
   destruct p; discriminate.
+Qed.
+
+Definition player_eqb (p1 p2 : Player) : bool :=
+  match p1, p2 with
+  | White, White => true
+  | Black, Black => true
+  | _, _ => false
+  end.
+
+Lemma player_eqb_true : forall p1 p2,
+  player_eqb p1 p2 = true -> p1 = p2.
+Proof.
+  intros [] [] pf; (reflexivity || discriminate).
+Qed.
+
+Lemma player_eqb_false : forall p1 p2,
+  player_eqb p1 p2 = false -> p1 = opp p2.
+Proof.
+  intros [] [] pf; (reflexivity || discriminate).
 Qed.

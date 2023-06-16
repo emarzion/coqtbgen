@@ -1,7 +1,12 @@
+Require Import Extraction.
+Set Extraction File Comment "asdf".
+
+
+(*
 Require Import String.
 
-Require Import CoqChess.Game.Game.
-Require Import CoqChess.Game.Strategy.
+Require Import Games.Game.Game.
+Require Import Games.Game.Strategy.
 
 CoInductive IO : Type -> Type :=
   | ret : forall {A}, A -> IO A
@@ -10,8 +15,8 @@ CoInductive IO : Type -> Type :=
   | print : string -> IO unit
   | exit : IO unit.
 
-Definition engine G : Type :=
-  forall s : GameState G, IO (Move s).
+Definition engine `{Game} : Type :=
+  forall s : GameState, IO (Move s).
 
 Inductive Result (A : Type) : Type :=
   | Ok : A -> Result A
@@ -20,11 +25,13 @@ Inductive Result (A : Type) : Type :=
 Arguments Ok {_} _.
 Arguments Error {_} _.
 
-CoFixpoint read_engine {G : Game}
-  (read : forall s : GameState G, string -> Result (Move s)) : engine G :=
+CoFixpoint read_engine `{Game}
+  (read : forall s : GameState, string -> Result (Move s)) : engine :=
   fun s => bind get_line (fun str =>
     match read s str with
     | Ok move => ret move
     | Error msg => bind (print msg) (fun _ =>
         read_engine read s)
     end).
+*)
+

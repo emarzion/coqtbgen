@@ -1,6 +1,9 @@
-Require Import CoqChess.Game.Game.
-Require Import CoqChess.Game.Player.
-Require Import CoqChess.Game.Strategy.
+Require Import Lia.
+Require Import List.
+
+Require Import Games.Game.Game.
+Require Import Games.Game.Player.
+Require Import Games.Game.Strategy.
 
 Inductive win {G : Game} (p : Player) : GameState G -> Type :=
   | atom_win : forall b,
@@ -20,6 +23,109 @@ Inductive win {G : Game} (p : Player) : GameState G -> Type :=
 Arguments atom_win {_} {_} {_} _.
 Arguments eloise_win {_} {_} {_} _ _ _ _.
 Arguments abelard_win {_} {_} {_} _ _ _.
+
+Fixpoint depth {G} {p} {s : GameState G} (w : win p s) : nat :=
+  match w with
+  | atom_win _ => 0
+  | eloise_win _ _ _ w' => S (depth w')
+  | @abelard_win _ _ s _ _ ws => S (list_max
+      (map (fun m => depth (ws m)) (enum_moves s)))
+  end.
+
+Lemma list_max_ne_achieves (xs : list nat) :
+  xs = nil \/ In (list_max xs) xs.
+Proof.
+  induction xs.
+  - now left.
+  - right.
+    simpl.
+    destruct IHxs.
+    + left.
+      rewrite H.
+      symmetry; apply PeanoNat.Nat.max_0_r.
+    + destruct (PeanoNat.Nat.max_spec_le a (list_max xs))
+        as [[_ Hle]|[_ Hle]];
+      rewrite Hle; tauto.
+Qed.
+
+Lemma depth_lower {G} {p} {s : GameState G} : forall (w : win p s)
+  (n : nat), n <= depth w -> exists (s' : GameState G) (w' : win p s'), depth w' = n.
+Proof.
+  induction w; intros n n_le.
+  - exists b, (atom_win e).
+    simpl in *; lia.
+  - simpl in n_le.
+    rewrite PeanoNat.Nat.le_succ_r in n_le.
+    destruct n_le.
+    + now apply IHw.
+    + rewrite H.
+      exists _, (eloise_win e e0 m w).
+      reflexivity.
+  - simpl in n_le.
+    rewrite PeanoNat.Nat.le_succ_r in n_le.
+    destruct n_le.
+    + assert (exists m : Move b,
+        n <= depth (w m)) as [m Hm].
+      { destruct (list_max_ne_achieves (map (fun m : Move b => depth (w m))
+          (enum_moves b))).
+        * pose (map_eq_nil _ _ H1).
+          destruct (nil_atomic_res e1); congruence.
+        * rewrite in_map_iff in H1.
+          destruct H1 as [m' Hm'].
+          exists m'; lia.
+      }
+      exact (H m n Hm).
+    + rewrite H0.
+      exists _, (abelard_win e e0 w).
+      reflexivity.
+Qed.
+
+
+Definition minimal {G} {p} {s : GameState G} (w : win p s) : Prop :=
+  forall (w' : win p s), depth w <= depth w'.
+
+Fixpoint saturated {G} {p} {s : GameState G} (w : win p s) : Prop :=
+  match w with
+  | atom_win _ => True
+  | @eloise_win _ _ s' _ _ _ w' => saturated w' /\
+      forall (m' : Move s') (w'' : win p (exec_move s' m')), depth w' <= depth w''
+  | abelard_win _ _ ws => forall m, saturated (ws m)
+  end.
+
+Lemma list_max_map {X} (f g : X -> nat) (fg : forall x, f x <= g x)
+  (xs : list X) : list_max (map f xs) <= list_max (map g xs).
+Proof.
+  induction xs; simpl.
+  - lia.
+  - simpl.
+    apply PeanoNat.Nat.max_le_compat.
+    + apply fg.
+    + exact IHxs.
+Qed.
+
+Lemma saturated_minimal {G} {p} {s : GameState G} (w : win p s) :
+  saturated w -> minimal w.
+Proof.
+  induction w; unfold minimal; simpl; intros.
+  - lia.
+  - destruct w'.
+    + congruence.
+    + simpl.
+      destruct H.
+      pose (H0 m0 w').
+      now apply le_n_S.
+    + elim (opp_no_fp p); congruence.
+  - destruct w'.
+    + congruence.
+    + elim (opp_no_fp p); congruence.
+    + simpl.
+      apply le_n_S.
+      apply list_max_map.
+      intro; now apply H.
+Qed.
+
+Definition mate {G} (p : Player) (s : GameState G) (n : nat) : Type :=
+  { w : win p s & depth w = n /\ minimal w }.
 
 Fixpoint strategy_of_win {G : Game} {p : Player} {s : GameState G}
   (w : win p s) : strategy p s :=

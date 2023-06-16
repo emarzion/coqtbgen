@@ -1,6 +1,6 @@
 Require Import List.
 
-Require Import CoqChess.Game.Player.
+Require Import Games.Game.Player.
 
 Inductive Result : Type :=
   | Win : Player -> Result

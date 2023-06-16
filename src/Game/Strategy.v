@@ -1,5 +1,5 @@
-Require Import CoqChess.Game.Player.
-Require Import CoqChess.Game.Game.
+Require Import Games.Game.Player.
+Require Import Games.Game.Game.
 
 CoInductive strategy {G : Game} (p : Player) : GameState G -> Type :=
   | atom_strategy : forall b res,
