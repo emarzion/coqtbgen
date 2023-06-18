@@ -2,15 +2,24 @@ Require Import Lia.
 Require Import List.
 Import ListNotations.
 
+Require Import Compare_dec.
+
 Require Import Games.Game.Game.
 Require Import Games.Game.Player.
 Require Import Games.Game.Draw.
 Require Import Games.Game.Win.
 
-Require Import Games.Util.TBLoop.
+(*Require Import Games.Util.TBLoop.*)
 Require Import Games.Util.StringMap.
 Require Import Games.Util.Show.
 Require Import Games.Util.Dec.
+Require Import Games.Util.NewLoop.
+
+Global Instance Show_disc {X} `{Show X} : Discrete X.
+Proof.
+  constructor.
+  apply Show_dec.
+Defined.
 
 Class FinGame (G : Game) : Type := {
   enum_states : list (GameState G);
@@ -101,6 +110,42 @@ Fixpoint filter_Nones {X Y} (f : X -> option Y) (xs : list X) : list X :=
     | Some _ => filter_Nones f xs'
     end
   end.
+
+Lemma In_filter_Nones_correct1 {X Y} (f : X -> option Y) (xs : list X) :
+  forall x, In x (filter_Nones f xs) -> f x = None /\ In x xs.
+Proof.
+  induction xs as [|x' xs'].
+  - intros x [].
+  - intros x HIn; simpl in *.
+    destruct (f x') eqn:fx'.
+    + destruct (IHxs' _ HIn).
+      split; auto.
+    + destruct HIn as [Heq|HIn].
+      * split; [congruence|tauto].
+      * destruct (IHxs' _ HIn).
+        split; auto.
+Qed.
+
+Lemma In_filter_Nones_correct2 {X Y} (f : X -> option Y) (xs : list X) :
+  forall x, f x = None /\ In x xs -> In x (filter_Nones f xs).
+Proof.
+  induction xs as [|x' xs'].
+  - intros x [_ []].
+  - intros x [fx [Heq|HIn]]; simpl.
+    + rewrite Heq, fx.
+      left; reflexivity.
+    + destruct (f x').
+      * apply IHxs'; auto.
+      * right; apply IHxs'; auto.
+Qed.
+
+Lemma In_filter_Nones_iff {X Y} (f : X -> option Y) (xs : list X) :
+  forall x, In x (filter_Nones f xs) <-> f x = None /\ In x xs.
+Proof.
+  intro; split.
+  - apply In_filter_Nones_correct1.
+  - apply In_filter_Nones_correct2.
+Qed.
 
 Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
   let prev :=
@@ -241,40 +286,40 @@ Definition TB_loop_data : loop_data TB := {|
 
 Definition TB_final : TB :=
   loop TB_loop_data TB_init.
-
+(*
 Definition respects_atomic_wins (tb : TB) : Prop := forall s pl,
   atomic_res s = Some (Win pl) ->
   tb_lookup tb s = Some (pl, 0).
+*)
+Definition satMate pl (s : GameState G) (n : nat) : Type :=
+  { w : win pl s & depth w = n /\ saturated w }.
 
 Record TB_valid (tb : TB) : Type := {
 
   win_tb : forall {s pl} (w : win pl s),
-    depth w < curr tb -> {n : nat & tb_lookup tb s = Some (pl, n)};
+    depth w < curr tb -> {n : nat & n <= depth w /\ tb_lookup tb s = Some (pl, n)};
 
-  tb_win : forall {s pl n},
+  tb_satMate : forall {s pl n},
     tb_lookup tb s = Some (pl, n) ->
-    win pl s;
-
-  tb_win_depth : forall {s pl n} (pf : tb_lookup tb s = Some (pl, n)),
-    depth (tb_win pf) = n;
-
-  tb_win_sat : forall {s pl n} (pf : tb_lookup tb s = Some (pl, n)),
-    saturated (tb_win pf);
+    satMate pl s n;
 
   win_last_white_positions : forall {s pl} (w : win pl s), to_play s = White ->
-    depth w = curr tb -> In s (last_white_positions tb);
+    depth w = curr tb ->
+    In s (last_white_positions tb) /\ pl = step_player (last_step tb) White;
 
-  last_white_positions_win : forall {s}, In s (last_white_positions tb) ->
-    win (step_player (last_step tb) White) s;
-
-  last_white_positions_win_depth : forall {s} (pf : In s (last_white_positions tb)),
-    depth (last_white_positions_win pf) = curr tb;
+  last_white_positions_satMate : forall {s}, In s (last_white_positions tb) ->
+    satMate (step_player (last_step tb) White) s (curr tb);
 
   win_last_black_positions : forall {s pl} (w : win pl s), to_play s = Black ->
-    depth w = curr tb -> In s (last_black_positions tb);
+    depth w = curr tb ->
+    In s (last_black_positions tb) /\ pl = step_player (last_step tb) Black;
 
+  last_black_positions_satMate : forall {s}, In s (last_black_positions tb) ->
+    satMate (step_player (last_step tb) Black) s (curr tb);
+
+(*
   tb_respects_atomic_wins : curr tb = 0 \/ respects_atomic_wins tb;
-
+*)
   last_white_positions_NoDup : NoDup (last_white_positions tb);
 
   last_black_positions_NoDup : NoDup (last_black_positions tb);
@@ -290,22 +335,6 @@ Record TB_valid (tb : TB) : Type := {
     length (last_black_positions tb) <= length enum_states;
 
   }.
-
-(* Lemma win_tb_TB_init : forall s pl (w : win pl s),
-    depth w < curr TB_init -> {n : nat & tb_lookup TB_init s = Some (pl, n)}.
-Proof.
-  unfold TB_init; simpl; lia.
-Defined. *)
-
-Lemma tb_win_TB_init :  forall s pl n,
-  tb_lookup TB_init s = Some (pl, n) ->
-  win pl s.
-Proof.
-  unfold TB_init, tb_lookup; simpl.
-  intros s pl n Hs.
-  destruct (to_play s);
-  now rewrite str_lookup_empty in Hs.
-Defined.
 
 Lemma last_white_positions_win_TB_init : forall s,
   In s (last_white_positions TB_init) ->
@@ -340,70 +369,58 @@ Proof.
 Qed.
 
 Lemma TB_init_valid : TB_valid TB_init.
-  refine {|
-    win_tb := _;
-    tb_win := tb_win_TB_init;
-    tb_win_depth := _;
-    tb_win_sat := _;
-    win_last_white_positions := _;
-    last_white_positions_win := last_white_positions_win_TB_init;
-    last_white_positions_win_depth := _;
-    win_last_black_positions := _;
-    tb_respects_atomic_wins := _;
-    last_white_positions_NoDup := _;
-    last_black_positions_NoDup := _;
-    last_white_positions_disj := _;
-    last_black_positions_disj := _;
-    sizes_never_exceed := _;
-  |}.
 Proof.
-  (* win_tb *)
+  unshelve econstructor.
   - unfold TB_init; simpl; lia.
-  (* tb_win_depth *)
-  - intros.
+  - intros s pl n pf.
     cut False; [tauto|].
     unfold tb_lookup in pf.
     destruct (to_play s) eqn:s_play; simpl in pf;
     now rewrite str_lookup_empty in pf.
-  (* tb_win_sat *)
+  - intros s pl w s_play w_depth.
+    simpl in *.
+    rewrite nodup_In.
+    split.
+    + apply enum_wins_correct2.
+      destruct w.
+      * rewrite (atomic_win_opp _ _ e) in s_play.
+        now destruct pl.
+      * now simpl in w_depth.
+      * now simpl in w_depth.
+    + destruct w; try (now simpl in w_depth).
+      pose (atomic_win_opp _ _ e).
+      destruct pl; auto.
+      simpl in *; congruence.
   - intros.
-    cut False; [tauto|].
-    unfold tb_lookup in pf.
-    destruct (to_play s) eqn:s_play; simpl in pf;
-    now rewrite str_lookup_empty in pf.
-  (* win_last_white_positions *)
+    unshelve eexists (atom_win _).
+    + apply enum_wins_correct1.
+      simpl in *.
+      now rewrite nodup_In in H5.
+    + simpl; now split.
   - intros s pl w s_play w_depth.
     simpl in *.
     rewrite nodup_In.
-    apply enum_wins_correct2.
-    destruct w.
-    + rewrite (atomic_win_opp _ _ e) in s_play.
-      now destruct pl.
-    + now simpl in w_depth.
-    + now simpl in w_depth.
-  (* last_white_positions_win_depth *)
-  - now intros.
-  (* win_last_black_positions *)
-  - intros s pl w s_play w_depth.
-    simpl in *.
-    rewrite nodup_In.
-    apply enum_wins_correct2.
-    destruct w.
-    + rewrite (atomic_win_opp _ _ e) in s_play.
-      now destruct pl.
-    + now simpl in w_depth.
-    + now simpl in w_depth.
-  (* tb_respects_atomic_wins *)
-  - now left.
-  (* last_white_positions_NoDup *)
+    split.
+    + apply enum_wins_correct2.
+      destruct w.
+      * rewrite (atomic_win_opp _ _ e) in s_play.
+        now destruct pl.
+      * now simpl in w_depth.
+      * now simpl in w_depth.
+    + destruct w; try (now simpl in w_depth).
+      pose (atomic_win_opp _ _ e).
+      destruct pl; auto.
+      simpl in *; congruence.
+  - intros.
+    unshelve eexists (atom_win _).
+    + apply enum_wins_correct1.
+      simpl in *.
+      now rewrite nodup_In in H5.
+    + simpl; now split.
   - apply NoDup_nodup.
-  (* last_black_positions_NoDup *)
   - apply NoDup_nodup.
-  (* last_white_positions_disj *)
   - intros; apply str_lookup_empty.
-  (* last_black_positions_disj *)
   - intros; apply str_lookup_empty.
-  (* sizes_never_exceed *)
   - simpl; rewrite size_empty; simpl.
     rewrite <- app_length.
     apply NoDup_incl_length.
@@ -419,17 +436,245 @@ Proof.
       apply enum_states_correct.
 Defined.
 
+Lemma map_tag_functional : forall pl n ps,
+  AL.functional (map (tag pl n) ps).
+Proof.
+  intros pl n ps.
+  intros s [q1 k] [q2 l] Hq1 Hq2.
+  rewrite in_map_iff in Hq1, Hq2.
+  destruct Hq1 as [t [Ht _]].
+  destruct Hq2 as [u [Hu _]].
+  unfold tag in Ht, Hu.
+  congruence.
+Qed.
+
+Lemma in_map_sig {X Y} `{Discrete Y} {f : X -> Y} {xs} {y}
+  : In y (map f xs) -> {x : X & f x = y /\ In x xs}.
+Proof.
+  induction xs as [|x xs'].
+  - intros [].
+  - intro HIn.
+    destruct (eq_dec (f x) y).
+    + exists x; split; auto.
+      now left.
+    + destruct IHxs' as [x' [Hx'1 Hx'2]].
+      * destruct HIn; [contradiction|auto].
+      * exists x'; split; auto.
+        now right.
+Defined.
+
+Lemma not_Some_None {X} (o : option X) :
+  (forall x, ~ o = Some x) -> o = None.
+Proof.
+  intro nSome.
+  destruct o; [|reflexivity].
+  elim (nSome x); reflexivity.
+Qed.
+
 Lemma TB_step_valid : forall tb, TB_valid tb
   -> TB_valid (TB_step tb).
 Proof.
+  intros tb v.
+  econstructor.
+  (* win_tb *)
+  - simpl; intros s pl w w_d.
+    destruct (le_lt_eq_dec _ _ w_d) as [pf|pf].
+    + pose proof (Arith_prebase.lt_S_n _ _ pf) as pf'. 
+      destruct (win_tb _ v w pf') as [k Hk].
+      exists k.
+      unfold tb_lookup in *.
+      destruct (to_play s) eqn:s_play.
+      * simpl.
+        unfold add_positions.
+        rewrite str_lookup_adds_nIn; auto.
+        rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        intro HIn.
+        rewrite last_white_positions_disj in Hk; auto.
+        now destruct Hk.
+      * simpl.
+        unfold add_positions.
+        rewrite str_lookup_adds_nIn; auto.
+        rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        intro HIn.
+        rewrite last_black_positions_disj in Hk; auto.
+        now destruct Hk.
+    + inversion pf as [pf'].
+      exists (curr tb).
+      unfold tb_lookup.
+      destruct (to_play s) eqn:s_play.
+      * simpl.
+        rewrite pf' at 1; split; [lia|].
+        unfold add_positions.
+        erewrite str_lookup_adds;
+        [reflexivity| apply map_tag_functional|].
+        rewrite in_map_iff.
+        exists s.
+        destruct (win_last_white_positions _ v _ s_play pf')
+          as [? Hpl].
+        split; auto.
+        now rewrite Hpl.
+      * simpl.
+        rewrite pf' at 1; split; [lia|].
+        unfold add_positions.
+        erewrite str_lookup_adds;
+        [reflexivity| apply map_tag_functional|].
+        rewrite in_map_iff.
+        exists s.
+        destruct (win_last_black_positions _ v _ s_play pf')
+          as [? Hpl].
+        split; auto.
+        now rewrite Hpl.
+  (* tb_satMate *)
+  - unfold tb_lookup.
+    intros s pl n Htb.
+    destruct (to_play s) eqn:s_play.
+    + simpl in Htb.
+      unfold add_positions in Htb.
+      destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+      * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
+        unfold tag in Hs'1.
+        epose (last_white_positions_satMate _ v Hs'2).
+        inversion Hs'1.
+        subst; auto.
+      * apply (tb_satMate _ v).
+        unfold tb_lookup.
+        now rewrite s_play.
+    + simpl in Htb.
+      unfold add_positions in Htb.
+      destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+      * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
+        unfold tag in Hs'1.
+        epose (last_black_positions_satMate _ v Hs'2).
+        inversion Hs'1.
+        subst; auto.
+      * apply (tb_satMate _ v).
+        unfold tb_lookup.
+        now rewrite s_play.
+  (* win_last_white_positions *)
+  - intros s pl w s_play w_depth.
+    simpl.
+    destruct (last_step tb) eqn:tb_step; simpl.
+    + destruct w.
+      * now simpl in w_depth.
+      * simpl in *.
+        destruct (win_last_black_positions _ v w) as [_ Hstep].
+        ** rewrite to_play_exec_move.
+           now rewrite s_play.
+        ** now inversion w_depth.
+        ** rewrite tb_step in Hstep.
+           simpl in Hstep; congruence.
+      * simpl in *.
+        split; [|apply opp_inj; simpl in *; congruence].
+        admit.
+    + destruct w.
+      * now simpl in w_depth.
+      * simpl in *.
+        inversion w_depth as [w_depth']; clear w_depth.
+        split; [|congruence].
+        unfold eloise_step.
+        rewrite nodup_In.
+        rewrite In_filter_Nones_iff.
+        split.
+        ** unfold add_positions.
+           apply not_Some_None.
+           intros [pl' n] Htb.
+           destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf]; clear Htb.
+           *** rewrite in_map_iff in pf.
+               destruct pf as [s' [Hs'1 Hs'2]].
+               unfold tag in Hs'1.
+               rewrite tb_step in Hs'1; simpl in Hs'1.
+               pose (eloise_win e e0 m w).
+               inversion Hs'1; subst.
+               admit.
+           *** admit.
+        ** rewrite in_concat.
+           exists (enum_preds (exec_move b m)).
+           split; [|apply enum_preds_correct2].
+           apply in_map.
+           eapply win_last_black_positions; eauto.
+           rewrite to_play_exec_move.
+           now rewrite s_play.
+      * simpl in *.
+        inversion w_depth as [w_depth'].
+        destruct (list_max_ne_achieves
+          (map (fun m => depth (w m)) (enum_moves b))) as [?|Hmax].
+        ** destruct (@nil_atomic_res _ b); [|congruence].
+           eapply map_eq_nil; eauto.
+        ** rewrite w_depth' in Hmax.
+           rewrite in_map_iff in Hmax.
+           destruct Hmax as [m [Hm _]].
+           destruct (win_last_black_positions _ v (w m)) as [_ Hstep].
+           *** rewrite to_play_exec_move; now rewrite s_play.
+           *** auto.
+           *** rewrite tb_step in Hstep.
+               simpl in Hstep.
+               rewrite Hstep in e0; simpl in e0; congruence.
+  (* last_white_positions_satMate *)
+  - admit.
+  (* win_last_black_positions *)
+  - admit.
+  (* last_black_positions_satMate *)
+  - admit.
+  (* last_white_positions_NoDup *)
+  - simpl.
+    destruct last_step.
+    + unfold abelard_step.
+      apply NoDup_nodup.
+    + unfold eloise_step.
+      apply NoDup_nodup.
+  (* last_black_positions_NoDup *)
+  - simpl.
+    destruct last_step.
+    + unfold abelard_step.
+      apply NoDup_nodup.
+    + unfold eloise_step.
+      apply NoDup_nodup.
+  (* last_white_positions_disj *)
+  - simpl.
+    intros s HIn.
+    destruct (last_step tb) eqn:tb_step.
+    + unfold abelard_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite filter_In in HIn.
+      destruct HIn as [HIn' _].
+      rewrite In_filter_Nones_iff in HIn'.
+      rewrite tb_step in HIn'.
+      tauto.
+    + unfold eloise_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite In_filter_Nones_iff in HIn.
+      rewrite tb_step in HIn.
+      tauto.
+  (* last_black_positions_disj *)
+  - simpl.
+    intros s HIn.
+    destruct (last_step tb) eqn:tb_step.
+    + unfold abelard_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite filter_In in HIn.
+      destruct HIn as [HIn' _].
+      rewrite In_filter_Nones_iff in HIn'.
+      rewrite tb_step in HIn'.
+      tauto.
+    + unfold eloise_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite In_filter_Nones_iff in HIn.
+      rewrite tb_step in HIn.
+      tauto.
+  (* sizes_never_exceed *)
+  -  admit.
 Admitted.
 
 Definition TB_validity_data : validity_data TB_loop_data.
 Proof.
-  refine ( {|
+  refine {|
   valid := TB_valid;
   step_valid := _
-  |} ).
+  |}.
   exact TB_step_valid.
 Defined.
 
@@ -509,6 +754,7 @@ Proof.
     apply last_white_positions_disj; auto.
 Qed.
 
+
 Lemma win_TB_final_lookup : forall s pl,
   win pl s -> {n : nat & tb_lookup TB_final s = Some (pl, n)}.
 Proof.
@@ -530,20 +776,24 @@ Proof.
       exact TB_init_valid.
     + rewrite iter_curr. exact w'_depth.
   - exists x.
-    exact e.
+    now destruct a.
 Defined.
+
+Lemma satMate_mate s pl n : satMate s pl n -> mate s pl n.
+Proof.
+  intros [w [w_depth w_sat]].
+  exists w.
+  split; auto.
+  now apply saturated_minimal.
+Qed.
 
 Theorem TB_final_lookup_mate : forall s pl n,
   tb_lookup TB_final s = Some (pl, n) ->
   mate pl s n.
 Proof.
   intros.
-  destruct TB_final_valid.
-  exists (tb_win0 _ _ _ H5).
-  split.
-  - apply tb_win_depth0.
-  - apply saturated_minimal.
-    apply tb_win_sat0.
+  apply satMate_mate.
+  exact (tb_satMate _ TB_final_valid H5).
 Defined.
 
 Theorem mate_TB_final_lookup : forall s pl n,
@@ -614,22 +864,11 @@ Proof.
       now apply IHxs'.
 Qed.
 
-Lemma map_tag_functional : forall pl n ps,
-  AL.functional (map (tag pl n) ps).
-Proof.
-  intros pl n ps.
-  intros s [q1 k] [q2 l] Hq1 Hq2.
-  rewrite in_map_iff in Hq1, Hq2.
-  destruct Hq1 as [t [Ht _]].
-  destruct Hq2 as [u [Hu _]].
-  unfold tag in Ht, Hu.
-  congruence.
-Qed.
-
-(* (* Definition respects_atomic_wins (tb : TB) : Prop :=
+Definition respects_atomic_wins (tb : TB) : Prop :=
   forall s pl, atomic_res s = Some (Win pl) ->
-  tb_lookup tb s = Some (pl, 0). *) *)
+  tb_lookup tb s = Some (pl, 0).
 
+(*
 Lemma respects_atomic_wins_step_1 : respects_atomic_wins (TB_step TB_init).
 Proof.
   intros s pl s_res.
@@ -654,6 +893,7 @@ Proof.
       rewrite nodup_In.
       now apply enum_wins_correct2.
 Qed.
+*)
 
 (** TODO : use in step proof *)
 (* Lemma respects_atomic_wins_step : forall tb, TB_valid tb -> respects_atomic_wins tb ->
@@ -679,13 +919,11 @@ Admitted. *)
 Lemma TB_final_respects_atomic_wins :
   respects_atomic_wins TB_final.
 Proof.
-  destruct (tb_respects_atomic_wins TB_final).
-  - apply TB_final_valid.
-  - destruct (loop_iter TB_loop_data TB_init) as [k Hk].
-    unfold TB_final in H5.
-    rewrite Hk in H5.
-    rewrite iter_curr in H5.
-    subst; simpl in *.
+  destruct (loop_iter TB_loop_data TB_init) as [k Hk].
+  destruct k.
+  - intros s pl s_res.
+    unfold TB_final; rewrite Hk.
+    simpl.
     pose proof (loop_measure TB_loop_data TB_init) as Hmeasure.
     simpl in Hmeasure.
     rewrite Hk in Hmeasure.
@@ -693,7 +931,6 @@ Proof.
     simpl in Hmeasure.
     rewrite size_empty in Hmeasure.
     unfold add_positions in Hmeasure.
-    intros s pl s_res.
     assert (length enum_states > 0).
     { apply (In_length_pos _ s).
       apply enum_states_correct.
@@ -717,8 +954,17 @@ Proof.
       }
       pose proof (str_adds_ne_pos (map (tag White 0) (nodup Show_dec (enum_wins White)))
         s (White, 0) Hs); lia.
-  - auto.
-Qed.
+  - intros s pl s_res.
+    pose (w := atom_win s_res).
+    destruct (win_tb _ TB_final_valid w) as [l [Hl1 Hl2]].
+    + simpl.
+      unfold TB_final.
+      rewrite Hk.
+      rewrite iter_curr; lia.
+    + simpl in Hl1.
+      inversion Hl1 as [Hl|].
+      now rewrite Hl in Hl2.
+Defined.
 
 Lemma TB_lookup_None : forall s,
   tb_lookup TB_final s = None ->
@@ -748,7 +994,7 @@ Proof.
           [[pl n] [HIn Htb]].
         symmetry in Htb.
         destruct (TB_final_lookup_mate _ _ _ Htb) as [w _].
-        eapply (tb_win TB_final TB_final_valid).
+        eapply (tb_satMate TB_final TB_final_valid).
         rewrite <- (player_eqb_true _ _ (H6 _ HIn)); simpl.
         exact Htb.
       * destruct (forallb_false _ _ Hps2) as [[pl n] [HIn Heqb]].
@@ -756,7 +1002,7 @@ Proof.
         pose proof (player_eqb_false _ _ Heqb) as pf.
         rewrite opp_invol in pf.
         destruct (map_fg_lemma Hps _ HIn) as [m [_ tb_m]].
-        pose (w := tb_win TB_final TB_final_valid tb_m).
+        pose (w := projT1 (tb_satMate TB_final TB_final_valid tb_m)).
         symmetry in pf.
         pose (w' := eloise_win s_res pf m w).
         destruct (win_TB_final_lookup _ _ w') as [k tb_s].
@@ -778,14 +1024,14 @@ Proof.
       destruct (tb_lookup TB_final (exec_move s m)) eqn:tb_sm.
       * destruct p as [pl n].
         destruct (player_id_or_opp_r_t (to_play s) pl) as [pf|pf].
-        ** pose (w := tb_win TB_final TB_final_valid tb_sm).
+        ** pose (w := projT1 (tb_satMate TB_final TB_final_valid tb_sm)).
            pose (eloise_win s_res pf _ w) as w'.
            destruct (win_TB_final_lookup _ _ w').
            congruence.
         ** right.
            rewrite pf.
            rewrite opp_invol.
-           eapply tb_win; [|eauto].
+           eapply tb_satMate; [|eauto].
            exact TB_final_valid.
       * left.
         apply d.
