@@ -33,7 +33,7 @@ Fixpoint depth {G} {p} {s : GameState G} (w : win p s) : nat :=
   end.
 
 Lemma list_max_ne_achieves (xs : list nat) :
-  xs = nil \/ In (list_max xs) xs.
+  {xs = nil} + {In (list_max xs) xs}.
 Proof.
   induction xs.
   - now left.
@@ -41,45 +41,12 @@ Proof.
     simpl.
     destruct IHxs.
     + left.
-      rewrite H.
+      rewrite e.
       symmetry; apply PeanoNat.Nat.max_0_r.
     + destruct (PeanoNat.Nat.max_spec_le a (list_max xs))
         as [[_ Hle]|[_ Hle]];
       rewrite Hle; tauto.
-Qed.
-
-Lemma depth_lower {G} {p} {s : GameState G} : forall (w : win p s)
-  (n : nat), n <= depth w -> exists (s' : GameState G) (w' : win p s'), depth w' = n.
-Proof.
-  induction w; intros n n_le.
-  - exists b, (atom_win e).
-    simpl in *; lia.
-  - simpl in n_le.
-    rewrite PeanoNat.Nat.le_succ_r in n_le.
-    destruct n_le.
-    + now apply IHw.
-    + rewrite H.
-      exists _, (eloise_win e e0 m w).
-      reflexivity.
-  - simpl in n_le.
-    rewrite PeanoNat.Nat.le_succ_r in n_le.
-    destruct n_le.
-    + assert (exists m : Move b,
-        n <= depth (w m)) as [m Hm].
-      { destruct (list_max_ne_achieves (map (fun m : Move b => depth (w m))
-          (enum_moves b))).
-        * pose (map_eq_nil _ _ H1).
-          destruct (nil_atomic_res e1); congruence.
-        * rewrite in_map_iff in H1.
-          destruct H1 as [m' Hm'].
-          exists m'; lia.
-      }
-      exact (H m n Hm).
-    + rewrite H0.
-      exists _, (abelard_win e e0 w).
-      reflexivity.
-Qed.
-
+Defined.
 
 Definition minimal {G} {p} {s : GameState G} (w : win p s) : Prop :=
   forall (w' : win p s), depth w <= depth w'.
@@ -91,6 +58,38 @@ Fixpoint saturated {G} {p} {s : GameState G} (w : win p s) : Prop :=
       forall (m' : Move s') (w'' : win p (exec_move s' m')), depth w' <= depth w''
   | abelard_win _ _ ws => forall m, saturated (ws m)
   end.
+
+Lemma sat_lower {G} {p} {s : GameState G} : forall (w : win p s)
+  (n : nat), saturated w -> n <= depth w -> exists (s' : GameState G) (w' : win p s'), depth w' = n /\ saturated w'.
+Proof.
+  induction w; intros n w_s n_le.
+  - exists b, (atom_win e).
+    simpl in *; lia.
+  - simpl in n_le.
+    rewrite PeanoNat.Nat.le_succ_r in n_le.
+    destruct n_le.
+    + simpl in w_s; now apply IHw.
+    + rewrite H.
+      exists _, (eloise_win e e0 m w); split.
+      * reflexivity.
+      * exact w_s.
+  - simpl in n_le.
+    rewrite PeanoNat.Nat.le_succ_r in n_le.
+    destruct n_le.
+    + assert (exists m : Move b,
+        n <= depth (w m)) as [m Hm].
+      { destruct (list_max_ne_achieves (map (fun m : Move b => depth (w m))
+          (enum_moves b))).
+        * pose (map_eq_nil _ _ e1).
+          destruct (nil_atomic_res e2); congruence.
+        * rewrite in_map_iff in i.
+          destruct i as [m' Hm'].
+          exists m'; lia.
+      }
+      exact (H m n (w_s m) Hm).
+    + rewrite H0.
+      exists _, (abelard_win e e0 w); now split.
+Qed.
 
 Lemma list_max_map {X} (f g : X -> nat) (fg : forall x, f x <= g x)
   (xs : list X) : list_max (map f xs) <= list_max (map g xs).

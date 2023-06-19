@@ -351,7 +351,7 @@ Proof.
     enum_preds_correct2 := _
   |} ).
   - intros [[] []] [[] []] pf; simpl in *;
-    try (intuition; discriminate).
+    try (exfalso; intuition; discriminate).
     + now exists RS_S.
     + now exists RS_R.
     + now exists LRS_L.
