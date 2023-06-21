@@ -175,6 +175,30 @@ Proof.
            now rewrite Hx'x in n.
 Defined.
 
+Lemma str_lookup_adds_None_invert {M} {X Y} `{StringMap M} `{Show X}
+  {ps} : forall {m : M Y} {x : X},
+  str_lookup x (str_adds ps m) = None ->
+  (~ In x (List.map fst ps)) /\
+  str_lookup x m = None.
+Proof.
+  induction ps as [|[x y] qs]; intros m x' Hx'.
+  - split.
+    + intros [].
+    + exact Hx'.
+  - simpl in *.
+    destruct (IHqs _ _ Hx').
+    split.
+    + intros [|].
+      * rewrite H3 in H2.
+        now rewrite str_lookup_add in H2.
+      * contradiction.
+    + destruct (eq_dec (show x') (show x)).
+      * rewrite (show_inj _ _ e) in H2.
+        now rewrite str_lookup_add in H2.
+      * rewrite str_lookup_add_neq in H2; auto.
+        congruence.
+Qed.
+
 Lemma str_lookup_adds_nIn {M} {X Y} `{StringMap M} `{Show X} :
   forall (ps : list (X * Y)) (x : X) m,
     ~ In x (List.map fst ps) ->
