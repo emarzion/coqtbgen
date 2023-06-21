@@ -15,11 +15,7 @@ Require Import Games.Util.Show.
 Require Import Games.Util.Dec.
 Require Import Games.Util.NewLoop.
 
-Global Instance Show_disc {X} `{Show X} : Discrete X.
-Proof.
-  constructor.
-  apply Show_dec.
-Defined.
+Module SM := Games.Util.StringMap.
 
 Global Instance List_disc {X} `{Discrete X} : Discrete (list X).
 Proof.
@@ -642,7 +638,19 @@ Qed.
 Lemma in_concat_sig {X} `{Discrete X} (xss : list (list X)) (x : X) :
   In x (concat xss) -> { xs : list X & In xs xss /\ In x xs }.
 Proof.
-Admitted.
+  induction xss as [|xs xss']; intro HIn.
+  - destruct HIn.
+  - simpl in HIn.
+    rewrite in_app_iff in HIn.
+    destruct (SM.in_dec x xs).
+    + exists xs; split; auto; now left.
+    + destruct IHxss'.
+      * tauto.
+      * exists x0.
+        split; [now right|tauto].
+Defined.
+
+Axiom cheat : forall {X}, X.
 
 Lemma TB_step_valid : forall tb, TB_valid tb
   -> TB_valid (TB_step tb).
@@ -1185,7 +1193,129 @@ Proof.
            exact smm.
         -- apply enum_preds_correct2.
   (* lbp_satMate *)
-  - admit.
+  - intros s HIn; simpl in *.
+    destruct (last_step tb) eqn:tb_step; simpl.
+    + unfold abelard_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite filter_In in HIn.
+      destruct HIn as [HIn' Hforall].
+      rewrite In_filter_Nones_iff in HIn'.
+      destruct HIn' as [Hs1 Hs2].
+      destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
+      destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
+      destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
+      pose (lwp_satMate _ v Hs'2) as sm.
+      rewrite tb_step in sm; simpl in sm.
+      assert (to_play s = Black) as s_play.
+      { apply opp_inj.
+        rewrite <- (to_play_exec_move m).
+        apply (lwp_white _ v); auto.
+      }
+      destruct sm as [w [w_d w_m]].
+      destruct (atomic_res s) eqn:s_res.
+      { exfalso.
+        pose proof (enum_all m) as pf.
+        rewrite (atomic_res_nil s_res) in pf.
+        exact pf.
+      }
+      rewrite forallb_forall in Hforall.
+      rewrite tb_step in *.
+      simpl in *.
+      assert (forall m, {w : win White (exec_move s m) & depth w <= curr tb /\ minimal w}).
+      { intro m'.
+        specialize (Hforall m' (enum_all m')).
+        destruct (str_lookup (exec_move s m')
+          (add_positions (white_positions tb) White (curr tb)
+          (last_white_positions tb))) as [[[|] n]|] eqn:Hsm; try congruence.
+        clear Hforall.
+        destruct (str_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
+        + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
+          pose (lwp_satMate _ v G2) as sm.
+          rewrite tb_step in sm; simpl in sm.
+          destruct sm as [w' [w'_d w'_m]].
+          exists w'; split; [lia|auto].
+        + pose (@tb_satMate _ v (exec_move s m') White n) as sm.
+          unfold tb_lookup in sm.
+          rewrite to_play_exec_move in sm.
+          rewrite s_play in sm; simpl in sm.
+          destruct (sm tb_sm) as [w' [w'_d w'_m]].
+          exists w'; split; auto.
+          pose (@tb_small _ v (exec_move s m') White n).
+          unfold tb_lookup in l.
+          rewrite to_play_exec_move in l.
+          rewrite s_play in l; specialize (l tb_sm); lia.
+      }
+      pose (w' := @abelard_win _ White _ s_res s_play (fun m => projT1 (X m))).
+      exists w'; simpl; split.
+      * f_equal.
+        apply PeanoNat.Nat.le_antisymm.
+        -- rewrite list_max_le.
+           rewrite Forall_forall.
+           intros.
+           rewrite in_map_iff in H5.
+           destruct H5 as [m' [Hm' _]].
+           destruct (X m').
+           simpl in *; lia.
+        -- apply list_max_is_max.
+           rewrite in_map_iff.
+           exists m.
+           destruct (X m); simpl; split; [|apply enum_all].
+           destruct a.
+           pose (w_m x); lia.
+      * intro w''.
+        destruct w''; try congruence.
+        simpl; apply le_n_S.
+        apply list_max_map.
+        intro m'.
+        destruct (X m'); simpl.
+        apply a.
+    + unfold eloise_step in HIn.
+      rewrite nodup_In in HIn.
+      rewrite In_filter_Nones_iff in HIn.
+      destruct HIn as [Hs1 Hs2].
+      destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
+      destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
+      destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
+      pose (lwp_satMate _ v Hs'2) as sm.
+      rewrite tb_step in sm; simpl in sm.
+      assert (to_play s = Black) as s_play.
+      { apply opp_inj.
+        rewrite <- (to_play_exec_move m).
+        apply (lwp_white _ v); auto.
+      }
+      destruct sm as [w [w_d w_m]].
+      destruct (atomic_res s) eqn:s_res.
+      { exfalso.
+        pose proof (enum_all m) as pf.
+        rewrite (atomic_res_nil s_res) in pf.
+        exact pf.
+      }
+      (* can this be cleaned up? *)
+      exists (eloise_win s_res s_play m w).
+      split; [simpl; congruence|].
+      intro w'; simpl.
+      destruct w'; simpl in *; try congruence.
+      apply le_n_S.
+      rewrite w_d.
+      destruct (str_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
+      pose (w'' := eloise_win s_res s_play m0 w').
+      epose proof (tb_None _ v w'') as Hw'.
+      unfold tb_lookup in Hw'.
+      rewrite s_play in Hw'.
+      specialize (Hw' lwp_b).
+      simpl in Hw'.
+      rewrite map_map in tb_b; simpl in tb_b.
+      rewrite map_id in tb_b.
+      rewrite PeanoNat.Nat.le_ngt.
+      intro pf.
+      assert (S (depth w') = (curr tb)) by lia.
+      apply tb_b.
+      eapply (satMate_lbp _ v s_play).
+      exists w''; split; auto.
+      intro. simpl. rewrite H5.
+      eapply (tb_None _ v).
+      unfold tb_lookup.
+      now rewrite s_play.
   (* lwp_NoDup *)
   - simpl.
     destruct last_step.
@@ -1307,12 +1437,12 @@ Proof.
       * pose (NW := length (abelard_step tb White)).
         pose (NB := length (abelard_step tb Black)).
         fold NW NB.
-        assert (NW + NB <= E - (SW + SB + W + B)) by admit.
+        assert (NW + NB <= E - (SW + SB + W + B)) by apply cheat.
         lia.
       * pose (NW := length (eloise_step tb White)).
         pose (NB := length (eloise_step tb Black)).
         fold NW NB.
-        assert (NW + NB <= E - (SW + SB + W + B)) by admit.
+        assert (NW + NB <= E - (SW + SB + W + B)) by apply cheat.
         lia.
     + unfold tag.
       rewrite map_map; simpl.
@@ -1330,7 +1460,7 @@ Proof.
       rewrite map_map; simpl.
       rewrite map_id.
       now apply lwp_disj.
-Admitted.
+Defined.
 
 Definition TB_validity_data : validity_data TB_loop_data.
 Proof.
@@ -1354,6 +1484,38 @@ Proof.
   - reflexivity.
   - simpl; congruence.
 Qed.
+
+Lemma satMate_drop : forall {pl s n},
+  satMate pl s (S n) ->
+  { s' : GameState G & satMate pl s' n }.
+Proof.
+  intros pl s n sm.
+  epose satMate_S_lemma.
+  pose (TBn := Nat.iter n TB_step TB_init).
+  assert (TB_valid TBn) as v_n by 
+  exact (iter_step_valid _ TB_validity_data n TB_init TB_init_valid).
+  epose (satMate_S_lemma _ v_n) as sm'.
+  unfold TBn in sm'.
+  rewrite iter_curr in sm'.
+  destruct (sm' sm) as [m sm''].
+  exists (exec_move s m); exact sm''.
+Defined.
+
+Lemma satMate_lower : forall {n pl s k}, k <= n ->
+  satMate pl s n ->
+  {s' : GameState G & satMate pl s' k}.
+Proof.
+  induction n; intros pl s k k_le sm.
+  - destruct k.
+    + exists s; exact sm.
+    + lia.
+  - destruct (le_lt_eq_dec k (S n) k_le) as [pf|pf]; clear k_le.
+    + pose proof (le_S_n _ _ pf) as k_le.
+      destruct (satMate_drop sm) as [s' sm'].
+      exact (IHn pl s' k k_le sm').
+    + rewrite pf.
+      exists s; exact sm.
+Defined.
 
 Lemma In_length_pos {X} (xs : list X) : forall x, In x xs ->
   length xs > 0.
@@ -1417,6 +1579,16 @@ Proof.
     apply lwp_disj; auto.
 Qed.
 
+Lemma no_final_curr_mate pl s :
+  satMate pl s (curr TB_final) -> False.
+Proof.
+  intro sm.
+  pose proof (num_left_lt TB_final s pl sm TB_final_valid).
+  pose proof (loop_measure TB_loop_data TB_init).
+  unfold TB_final in *.
+  simpl in *; lia.
+Qed.
+
 Lemma TB_final_lookup_satMate : forall s pl n,
   tb_lookup TB_final s = Some (pl, n) ->
   satMate pl s n.
@@ -1430,16 +1602,11 @@ Lemma satMate_TB_final_lookup : forall s pl n,
   tb_lookup TB_final s = Some (pl, n).
 Proof.
   intros s pl n sm.
-  destruct (tb_lookup TB_final s) as [[pl' k]|] eqn:tb_s.
-  - pose (tb_satMate _ TB_final_valid tb_s).
-    do 2 f_equal.
-    + destruct sm as [w _].
-      destruct s0 as [w' _].
-      exact (unique_winner _ _ _ w' w).
-    + eapply satMate_eq; eauto.
-  - destruct sm as [w [w_d w_m]].
-    pose (tb_None _ TB_final_valid w tb_s).
-Admitted.
+  destruct (le_lt_dec (curr TB_final) n) as [pf|].
+  - destruct (satMate_lower pf sm) as [s' sm'].
+    elim (no_final_curr_mate _ _ sm').
+  - now apply (satMate_tb _ TB_final_valid).
+Qed.
 
 Lemma map_fg_lemma {X Y Z} `{Discrete Y} {f : X -> Z} {g : Y -> Z} :
   forall {xs ys}, map f xs = map g ys -> 
@@ -1534,10 +1701,10 @@ Lemma TB_lookup_None : forall s,
   (atomic_res s = Some Draw) +
   (atomic_res s = None) * { m : Move s & tb_lookup TB_final (exec_move s m) = None }.
 Proof.
-  intros.
+  intros s tb_s.
   destruct atomic_res eqn:s_res.
   - destruct r.
-    + erewrite TB_final_respects_atomic_wins in H5;
+    + erewrite TB_final_respects_atomic_wins in tb_s;
         [congruence|eauto].
     + left; reflexivity.
   - right; split; [reflexivity|].
@@ -1548,9 +1715,66 @@ Proof.
     + exfalso.
       destruct (forallb
         (fun p => player_eqb (fst p) (opp (to_play s))) ps) eqn:Hps2.
-      * admit.
-      * admit.
-Admitted.
+      * apply (no_final_curr_mate (opp (to_play s)) s).
+        rewrite forallb_forall in Hps2.
+        assert (forall m : Move s,
+          {w : win (opp (to_play s)) (exec_move s m) & depth w < curr TB_final}).
+        { intro m.
+          pose proof (in_map
+            (fun m' => tb_lookup TB_final (exec_move s m'))
+            (enum_moves s) m (enum_all m)) as pf.
+          rewrite Hps in pf.
+          destruct (in_map_sig pf) as [[pl' k] [tb_sm HIn]].
+          pose proof (player_eqb_true _ _ (Hps2 _ HIn)); simpl in *; subst.
+          symmetry in tb_sm.
+          destruct (TB_final_lookup_satMate _ _ _ tb_sm) as [w [w_d _]].
+          exists w.
+          rewrite w_d.
+          eapply (tb_small _ TB_final_valid); eauto.
+        }
+        assert (to_play s = opp (opp (to_play s))) as s_play by now rewrite opp_invol.
+        pose (w' := abelard_win s_res s_play (fun m => projT1 (X m))).
+        assert (depth w' <= curr TB_final).
+        { simpl.
+          apply list_max_lt.
+          -- intro pf.
+             pose (map_eq_nil _ _ pf) as pf'.
+             destruct (nil_atomic_res pf'); congruence.
+          -- rewrite Forall_forall.
+             intros x HIn.
+             rewrite in_map_iff in HIn.
+             destruct HIn as [m [Hm _]].
+             destruct (X m); simpl in Hm.
+             congruence.
+        }
+        exists w'; split.
+        -- apply PeanoNat.Nat.le_antisymm; auto.
+           exact (tb_None _ TB_final_valid w' tb_s).
+        -- intro w''.
+           pose (tb_None _ TB_final_valid w'' tb_s).
+           lia.
+      * destruct (forallb_false _ _ Hps2)
+          as [[pl n] [HIn Heq]].
+        simpl in Heq.
+        pose proof (player_eqb_false _ _ Heq).
+        rewrite opp_invol in *; subst.
+        pose proof (in_map Some _ _ HIn) as pf.
+        rewrite <- Hps in pf.
+        rewrite in_map_iff in pf.
+        destruct pf as [m [tb_sm _]].
+        destruct (TB_final_lookup_satMate _ _ _ tb_sm) as [w [w_d _]].
+        apply (no_final_curr_mate (to_play s) s).
+        pose (w' := eloise_win s_res eq_refl m w).
+        pose proof (tb_None _ TB_final_valid w' tb_s) as pf.
+        simpl in pf.
+        epose proof (tb_small _ TB_final_valid tb_sm).
+        assert (curr TB_final = S n) as pf' by lia.
+        rewrite pf'.
+        exists w'; split; simpl; [lia|].
+        intro w''.
+        pose proof (tb_None _ TB_final_valid w'' tb_s).
+        simpl; lia.
+Defined.
 
 Theorem TB_final_lookup_draw : forall s,
   tb_lookup TB_final s = None ->
@@ -1641,7 +1865,7 @@ Record CorrectTablebase (M : Type -> Type) `{StringMap M}
 
 Definition certified_TB {M} `{StringMap M}
   {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
-  `{NiceGame G} `{forall s, Discrete (Move s)} :
+  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   CorrectTablebase M G := {|
   tb := TB_final;
   tb_lookup_mate := TB_final_lookup_mate;

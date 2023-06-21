@@ -217,6 +217,25 @@ Proof.
       right; auto.
 Qed.
 
+Lemma in_dec {X} `{Discrete X} (x : X) (xs : list X) :
+  { In x xs } + { ~ In x xs }.
+Proof.
+  induction xs as [|x' xs']; simpl.
+  - now right.
+  - destruct (eq_dec x' x).
+    + left; now left.
+    + destruct IHxs'.
+      * left; now right.
+      * right; intros [|]; contradiction.
+Defined.
+
+Global Instance Show_disc {X} `{Show X} : Discrete X.
+Proof.
+  constructor.
+  apply Show_dec.
+Defined.
+
+
 Lemma str_lookup_adds {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall m : M Y, AL.functional ps ->
   forall (x : X) (y : Y), In (x,y) ps ->
@@ -226,31 +245,22 @@ Proof.
   - destruct HIn.
   - simpl in *.
     destruct HIn.
-    + inversion H1.
-      rewrite str_lookup_adds_nIn.
-      * admit.
-      * admit.
-Admitted.
-
-
-(*
-Lemma str_lookup_adds {M} {X Y} `{StringMap M} `{Show X}
-  (ps : list (X * Y)) : forall m : M Y, NoDup (List.map fst ps) ->
-  forall (x : X) (y : Y), In (x,y) ps ->
-  str_lookup x (str_adds ps m) = Some y.
-Proof.
-  induction ps as [|[x y] qs]; intros m ndkeys x' y' HIn.
-  - destruct HIn.
-  - simpl in *.
-    inversion ndkeys.
-    destruct HIn.
-    + inversion H5.
-      rewrite str_lookup_adds_nIn.
-      * apply str_lookup_add.
-      * congruence.
-    + now apply IHqs.
+    + inversion H1; subst.
+      destruct (in_dec x' (map fst qs)).
+      * apply (IHqs (str_add x' y' m));
+          [exact (AL.functional_tail ndkeys)|].
+        unfold AL.functional in ndkeys.
+        rewrite in_map_iff in i.
+        destruct i as [[u v] [Heq HIn]].
+        simpl in Heq; subst.
+        rewrite (ndkeys x' y' v); auto.
+        ** now left.
+        ** now right.
+      * rewrite str_lookup_adds_nIn; auto.
+        apply str_lookup_add.
+    + apply IHqs; auto.
+      exact (AL.functional_tail ndkeys).
 Qed.
-*)
 
 Global Instance AssocList_SM : StringMap (AL.t string) := {|
   empty X := AL.empty;
