@@ -80,6 +80,66 @@ Fixpoint str_adds {M} {X Y} `{StringMap M} `{Show X}
   | (x,y) :: qs => str_adds qs (str_add x y m)
   end.
 
+Inductive good {M} {X Y} `{StringMap M} `{Show X} : M Y -> Prop :=
+  | good_e : good empty
+  | good_a {x y m} : good m -> str_lookup x m = None -> good (str_add x y m).
+
+Fixpoint good_as {M} {X Y} `{StringMap M} `{Show X} {ps : list (X * Y)}
+  {m : M Y} (pf : good m) (nd : NoDup (map fst ps))
+  (disj : forall x y, In (x,y) ps -> str_lookup x m = None) {struct ps}
+  : good (str_adds ps m).
+Proof.
+  induction ps as [|[x y] qs].
+  - exact pf.
+  - simpl.
+    apply good_as.
+    + apply good_a; auto.
+      apply (disj x y); now left.
+    + now inversion nd.
+    + intros x' y' HIn.
+      rewrite str_lookup_add_neq.
+      * apply (disj x' y'); now right.
+      * simpl in nd; inversion nd.
+        intro Heq.
+        apply H3.
+        rewrite <- Heq.
+        rewrite in_map_iff.
+        exists (x', y'); split; auto.
+Qed.
+
+Record map_list_equiv {M} {X Y} `{Show X} `{StringMap M}
+  (m : M Y) (ps : list (X * Y)) : Prop := {
+  to_list_size : size m = List.length ps;
+  keys_unique : NoDup (map fst ps);
+  lookup_in {x y} : str_lookup x m = Some y <-> In (x,y) ps;
+  }.
+
+Lemma str_adds_add {M} {X Y} `{StringMap M} `{Show X}
+  {ps : list (X * Y)} : forall x y m,
+  str_add x y (str_adds ps m) = str_adds (ps ++ [(x,y)]) m.
+Proof.
+  induction ps; intros.
+  - reflexivity. 
+  - simpl.
+    destruct a.
+    now rewrite IHps.
+Qed.
+
+Lemma str_adds_app {M} {X Y} `{StringMap M} `{Show X}
+  {ps : list (X * Y)} : forall qs m,
+  str_adds ps (str_adds qs m) = str_adds (qs ++ ps) m.
+Proof.
+  induction ps; intros.
+  - simpl; now rewrite app_nil_r.
+  - simpl.
+    destruct a.
+    assert (qs ++ (x,y) :: ps = (qs ++ [(x,y)]) ++ ps)%list.
+    { now rewrite <- app_assoc. }
+    rewrite H1.
+    rewrite <- IHps.
+    now rewrite str_adds_add.
+Qed.
+
 Lemma str_size_add_le {M} {X Y} `{StringMap M} `{Show X}
   (x : X) (y : Y) : forall m : M Y,
   size m <= size (str_add x y m).
@@ -175,6 +235,47 @@ Proof.
            now rewrite Hx'x in n.
 Defined.
 
+Lemma good_to_list {M} {X Y} `{Show X} `{StringMap M}
+  (m : M Y) (g : good m) : exists (ps : list (X * Y)), map_list_equiv m ps.
+Proof.
+  induction g.
+  - exists nil; constructor.
+    + now rewrite size_empty.
+    + constructor.
+    + intros x y.
+      unfold str_lookup.
+      now rewrite lookup_empty.
+  - destruct IHg as [ps [tl_sz key_un l_in]].
+    exists ((x,y) :: ps); constructor.
+    + unfold str_add.
+      unfold str_lookup in H1.
+      rewrite size_add.
+      rewrite H1.
+      simpl; congruence.
+    + simpl; constructor; auto.
+      intro HIn.
+      rewrite in_map_iff in HIn.
+      destruct HIn as [[str x'] [Hx1 Hx2]].
+      simpl in *.
+      rewrite Hx1 in Hx2.
+      rewrite <- l_in in Hx2; congruence.
+    + intros.
+      unfold str_lookup, str_add.
+      destruct (string_dec (show x0) (show x)).
+      * rewrite e.
+        rewrite lookup_add.
+        split; intro.
+        -- pose (show_inj _ _ e).
+           left; congruence.
+        -- destruct H2; [congruence|].
+           rewrite <- l_in in H2.
+           pose (show_inj _ _ e); congruence.
+      * rewrite lookup_add_neq; auto.
+        unfold str_lookup in l_in.
+        rewrite l_in; intuition.
+        destruct H2; [congruence|auto].
+Qed.
+
 Lemma str_lookup_adds_None_invert {M} {X Y} `{StringMap M} `{Show X}
   {ps} : forall {m : M Y} {x : X},
   str_lookup x (str_adds ps m) = None ->
@@ -234,7 +335,6 @@ Proof.
   constructor.
   apply Show_dec.
 Defined.
-
 
 Lemma str_lookup_adds {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall m : M Y, AL.functional ps ->
