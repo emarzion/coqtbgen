@@ -3,6 +3,7 @@ Open Scope char.
 
 Require Import String.
 Require List.
+Import List.ListNotations.
 Open Scope string_scope.
 
 Class Show (X : Type) : Type := {
@@ -26,33 +27,44 @@ Fixpoint char_free (c : ascii) (str : string) : Prop :=
   | String c' str' => c <> c' /\ char_free c str'
   end.
 
+Lemma char_free_app (c : ascii) (str str' : string) :
+  char_free c (str ++ str') <-> char_free c str /\ char_free c str'.
+Proof.
+Admitted.
+
 Lemma char_free_split : forall {c s t u v},
-  char_free c s ->
-  char_free c t ->
-  char_free c u ->
-  char_free c v ->
   s ++ (String c t) = u ++ (String c v) ->
+  char_free c s ->
+  char_free c u ->
   s = u /\ t = v.
 Proof.
   intros c s.
-  induction s; intros.
+  induction s; intros t u v Heq Hs Hu.
   - destruct u.
-    + inversion H3; now split.
+    + inversion Heq; now split.
     + simpl in *.
-      now inversion H3.
+      now inversion Heq.
   - destruct u.
     + simpl in *.
-      inversion H3.
-      now rewrite H5 in H.
+      inversion Heq.
+      now rewrite H0 in Hs.
     + simpl in *.
-      inversion H3.
-      destruct H, H1.
-      destruct (IHs _ _ _ H4 H0 H7 H2 H6).
+      inversion Heq.
+      destruct Hs, Hu.
+      destruct (IHs _ _ _ H1); auto.
       split; [congruence|auto].
 Qed.
 
 Class CommaFree (X : Type) `{Show X} := {
   comma_free : forall x, char_free (",")%char (show x)
+  }.
+
+Class SemicolonFree (X : Type) `{Show X} := {
+  semicolon_free : forall x, char_free (";")%char (show x)
+  }.
+
+Class Nonnil (X : Type) `{Show X} := {
+  nonnil : forall x, show x <> ""
   }.
 
 Global Instance Show_Prod {X Y} `{CommaFree X, CommaFree Y} : Show (X * Y).
@@ -61,11 +73,93 @@ Proof.
     (fun '(x,y) => show x ++ "," ++ show y)).
   intros [x y] [x' y'] pair_eq.
   inversion pair_eq.
-  destruct (char_free_split
-    (comma_free x)
-    (comma_free y)
-    (comma_free x')
-    (comma_free y') H4).
+  destruct (char_free_split H4); try apply comma_free.
   rewrite (show_inj _ _ H3).
   now rewrite (show_inj _ _ H5).
+Defined.
+
+Lemma string_app_lemma (pre pre' suff : string) :
+  pre ++ suff = pre' ++ suff -> pre = pre'.
+Admitted.
+
+Global Instance Show_list {X} `{sh : Show X}
+  `{@SemicolonFree X sh, @Nonnil X sh} : Show (list X).
+Proof.
+  refine {|
+    show xs := "[" ++ String.concat ";" (List.map show xs) ++ "]";
+    show_inj := _
+  |}.
+  intro xs; induction xs; intro ys.
+  - destruct ys; intro Heq; [reflexivity|].
+    simpl in Heq.
+    destruct ys; simpl in *.
+    + destruct (show x) eqn:Hx.
+      * elim (nonnil x Hx).
+      * destruct s; discriminate.
+    + destruct (show x); [discriminate|].
+      destruct s; discriminate.
+  - destruct ys; intro Heq; simpl in *.
+    + destruct xs.
+      * simpl in Heq.
+        destruct (show a) eqn:Ha.
+        -- elim (nonnil a Ha).
+        -- destruct s; discriminate.
+      * simpl in Heq.
+        destruct (show a); [discriminate|].
+        destruct s; discriminate.
+    + destruct xs, ys; simpl in Heq.
+      * f_equal.
+        apply show_inj.
+        apply (string_app_lemma _ _ "]").
+        now inversion Heq.
+      * absurd (char_free ";" (String "[" (show a ++ "]"))).
+        -- rewrite Heq; simpl.
+           repeat rewrite char_free_app; simpl.
+           firstorder.
+        -- simpl; split; [discriminate|].
+           rewrite char_free_app; split.
+           ++ apply semicolon_free.
+           ++ simpl; now split.
+      * absurd (char_free ";" (String "[" (show x ++ "]"))).
+        -- rewrite <- Heq; simpl.
+           repeat rewrite char_free_app; simpl.
+           firstorder.
+        -- simpl; split; [discriminate|].
+           rewrite char_free_app; split.
+           ++ apply semicolon_free.
+           ++ simpl; now split.
+      * rewrite (IHxs (x1 :: ys)%list).
+        -- f_equal.
+           inversion Heq.
+           pose proof (string_app_lemma _ _ _ H2).
+           destruct (char_free_split H1); simpl in *; try apply semicolon_free.
+           now apply show_inj.
+        -- destruct xs; simpl in *.
+           ++ repeat f_equal.
+              inversion Heq.
+              pose proof (string_app_lemma _ _ _ H2).
+              edestruct (char_free_split H1); simpl in *; try apply semicolon_free; auto.
+           ++ inversion Heq.
+              pose proof (string_app_lemma _ _ _ H2).
+              destruct (char_free_split H1); simpl in *; try apply semicolon_free.
+              congruence.
+Defined.
+
+Global Instance CommaFree_list {X} `{sh : Show X}
+  `{@SemicolonFree X sh, @Nonnil X sh, @CommaFree X sh} : CommaFree (list X).
+Proof.
+  constructor.
+  intro xs; induction xs.
+  - simpl; repeat split; discriminate.
+  - simpl; split; [discriminate|].
+    destruct xs; simpl.
+    + rewrite char_free_app; split.
+      * apply comma_free.
+      * simpl; repeat split.
+        discriminate.
+    + rewrite char_free_app; repeat split; [|discriminate].
+      rewrite char_free_app; repeat split; try discriminate.
+      * apply comma_free.
+      * destruct xs; simpl in *;
+        rewrite char_free_app in IHxs; tauto.
 Defined.

@@ -1,8 +1,26 @@
+Require Import String.
+Require Import Games.Util.Show.
 Require Import Games.Util.All.
 
 Inductive Player :=
   | White : Player
   | Black : Player.
+
+Definition show_player : Player -> string :=
+  fun p =>
+    match p with
+    | White => "White"%string
+    | Black => "Black"%string
+    end.
+
+Global Instance Show_Player : Show Player.
+Proof.
+  refine ( {|
+    show := show_player;
+    show_inj := _
+  |} ).
+  intros [] [] pf; (reflexivity || discriminate).
+Defined.
 
 #[export]
 Instance Player_Discrete : Discrete Player.

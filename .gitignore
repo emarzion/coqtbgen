@@ -9,3 +9,4 @@ Makefile.conf
 *.vok
 *.vos
 *.v#
+_build

@@ -330,6 +330,12 @@ Proof.
       * right; intros [|]; contradiction.
 Defined.
 
+Definition in_decb {X} `{Discrete X} (x : X) (xs : list X) :=
+  match in_dec x xs with
+  | left _ => true
+  | right _ => false
+  end.
+
 Global Instance Show_disc {X} `{Show X} : Discrete X.
 Proof.
   constructor.

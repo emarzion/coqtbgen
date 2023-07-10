@@ -381,22 +381,6 @@ Proof.
   - intros [[] []] []; simpl; tauto.
 Defined.
 
-Definition show_player : Player -> string :=
-  fun p =>
-    match p with
-    | White => "White"
-    | Black => "Black"
-    end.
-
-Global Instance Show_Player : Show Player.
-Proof.
-  refine ( {|
-    show := show_player;
-    show_inj := _
-  |} ).
-  intros [] [] pf; (reflexivity || discriminate).
-Defined.
-
 Global Instance CF_Player : CommaFree Player.
 Proof.
   constructor.
@@ -431,10 +415,9 @@ Proof.
   simpl; repeat split; discriminate.
 Defined.
 
-Definition TB_Sample : CorrectTablebase  (AssocList.t string) SampleGame :=
+Require Import Games.Util.HMap.
+
+Definition TB_Sample : CorrectTablebase HM SampleGame :=
   certified_TB.
 
-Print Assumptions TB_Sample.
-
-Time Compute (tb _ _ TB_Sample).
-
+Definition tb_Sample := tb TB_Sample.
