@@ -1,0 +1,28 @@
+name: Docker CI
+
+on:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        coq_version:
+          - '8.16.1'
+        ocaml_version:
+          - '4.14.1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+
+      - name: Use OCaml ${{ matrix.ocaml-version }}
+        uses: avsm/setup-ocaml@v1
+        with:
+          ocaml-version: ${{ matrix.ocaml-version }}
+
+      - run: opam pin add coq ${{ matrix.coq-version }}
+      - run: opam install . --deps-only
+      - run: dune build

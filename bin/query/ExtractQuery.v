@@ -100,8 +100,6 @@ Extract Constant pf_map =>
   "(fun xs f -> TailRec.map (fun x -> f x __) xs)".
 *)
 
-Check BearGame.exec_move.
-
 Definition RW_exec_move (s : BG_State RomanWheel)
  : BG_Move s -> BG_State RomanWheel :=
   exec_move.
