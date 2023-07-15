@@ -9,8 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        coq_version:
-          - '8.16.1'
         ocaml-compiler:
           - 4.14.x
 
@@ -22,7 +20,5 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
-      - run: opam pin add coq ${{ matrix.coq-version }}
       - run: opam install . --deps-only
       - run: opam exec -- dune build
