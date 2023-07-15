@@ -1,0 +1,31 @@
+(coq.extraction
+  (prelude ExtractRomanWheel)
+  (extracted_modules TBGen)
+  (theories Games))
+
+(library
+  (name extracted_code)
+  (modules
+    ;; Patch code
+    M
+
+    ;; Extracted code
+    TBGen
+  ))
+
+(env
+  (dev
+    (flags (:standard -w -39 -w -33))
+    (ocamlopt_flags (:standard -O3)))
+  (release
+    (ocamlopt_flags (:standard -O3))))
+
+(executable
+  (name gen_file)
+  (modules gen_file)
+  (libraries extracted_code))
+
+(rule
+  (target tb.txt)
+  (deps gen_file.exe)
+  (action (run ./gen_file.exe)))

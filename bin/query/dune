@@ -1,0 +1,58 @@
+(coq.extraction
+  (prelude ExtractQuery)
+  (extracted_modules
+    Ascii
+    BearGame
+    Compare_dec
+    Datatypes
+    Dec
+    ExtractQuery
+    Game
+    Graph
+    List0
+    Player
+    RomanWheel
+    Show
+    Sort
+    Specif
+    String0
+    StringMap
+    TB
+  )
+  (theories Games))
+
+(library
+  (name query)
+  (modules
+    ;; Patch code
+    TailRec
+
+    ;; Extracted code
+    Ascii
+    BearGame
+    Compare_dec
+    Datatypes
+    Dec
+    ExtractQuery
+    Game
+    Graph
+    List0
+    Player
+    RomanWheel
+    Show
+    Sort
+    Specif
+    String0
+    StringMap
+    TB
+
+    ;; Ocaml code
+    read_file
+  ))
+
+(env
+  (dev
+    (flags (:standard -w -39 -w -33))
+    (ocamlopt_flags (:standard -O3)))
+  (release
+    (ocamlopt_flags (:standard -O3))))

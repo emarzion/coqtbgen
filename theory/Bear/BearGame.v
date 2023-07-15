@@ -15,6 +15,20 @@ Require Import Games.Util.Dec.
 Require Import Games.Util.AssocList.
 Require Import Games.Util.StringMap.
 
+Definition NoDup_dec {X} `{Discrete X} (xs : list X) :
+  { NoDup xs } + { ~ NoDup xs }.
+Proof.
+  induction xs.
+  - left; constructor.
+  - destruct (in_dec a xs).
+    + right; intro pf.
+      now inversion pf.
+    + destruct IHxs.
+      * left; now constructor.
+      * right; intro pf.
+        now inversion pf.
+Defined.
+
 Record BG_State (G : Graph) : Type := {
 
   to_play : Player;

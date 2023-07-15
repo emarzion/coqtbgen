@@ -1,0 +1,20 @@
+(executable
+  (name index)
+  (modules index)
+  (modes byte)
+  (preprocess (pps js_of_ocaml-ppx))
+  (libraries query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+
+(rule
+ (targets index.js)
+ (action
+  (run
+   %{bin:js_of_ocaml}
+   %{dep:index.bc}
+   -o
+   %{targets}
+   --enable effects
+   --opt=3
+   --source-map
+   --file
+   %{dep:../gen/tb.txt}:/static/tb.txt)))

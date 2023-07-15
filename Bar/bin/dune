@@ -1,5 +1,0 @@
-(executable
- (public_name Bar)
- (name main)
- (libraries Bar)
- )

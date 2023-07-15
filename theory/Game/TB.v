@@ -104,50 +104,63 @@ Definition add_positions (m : M (Player * nat)) (winner : Player) (n : nat)
   (ps : list (GameState G)) : M (Player * nat) :=
   str_adds (map (tag winner n) ps) m.
 
-Fixpoint filter_Nones {X Y} (f : X -> option Y) (xs : list X) : list X :=
+Fixpoint filter_Nones_aux {X Y} (acc : list X) (f : X -> option Y) (xs : list X) : list X :=
   match xs with
-  | [] => []
+  | [] => acc
   | x :: xs' =>
     match f x with
-    | None => x :: filter_Nones f xs'
-    | Some _ => filter_Nones f xs'
+    | None => filter_Nones_aux (x :: acc) f xs'
+    | Some _ => filter_Nones_aux acc f xs'
     end
   end.
 
-Lemma In_filter_Nones_correct1 {X Y} (f : X -> option Y) (xs : list X) :
-  forall x, In x (filter_Nones f xs) -> f x = None /\ In x xs.
+Lemma In_filter_Nones_aux_correct1 {X Y} (f : X -> option Y) (xs : list X) :
+  forall acc x, In x (filter_Nones_aux acc f xs) -> (f x = None /\ In x xs) \/ In x acc.
 Proof.
-  induction xs as [|x' xs'].
-  - intros x [].
-  - intros x HIn; simpl in *.
-    destruct (f x') eqn:fx'.
-    + destruct (IHxs' _ HIn).
-      split; auto.
-    + destruct HIn as [Heq|HIn].
-      * split; [congruence|tauto].
-      * destruct (IHxs' _ HIn).
-        split; auto.
+  induction xs as [|x' xs']; intros acc x HIn; simpl in *.
+  - now right.
+  - destruct (f x') eqn:fx'.
+    + destruct (IHxs' _ _ HIn).
+      * left; split; tauto.
+      * now right.
+    + destruct (IHxs' _ _ HIn) as [Heq|HIn'].
+      * left; split; tauto.
+      * destruct HIn'.
+        -- left; split; auto; congruence.
+        -- now right.
 Qed.
 
-Lemma In_filter_Nones_correct2 {X Y} (f : X -> option Y) (xs : list X) :
-  forall x, f x = None /\ In x xs -> In x (filter_Nones f xs).
+Lemma In_filter_Nones_aux_correct2 {X Y} (f : X -> option Y) (xs : list X) :
+  forall acc x, (f x = None /\ In x xs) \/ In x acc -> In x (filter_Nones_aux acc f xs).
 Proof.
   induction xs as [|x' xs'].
-  - intros x [_ []].
-  - intros x [fx [Heq|HIn]]; simpl.
-    + rewrite Heq, fx.
-      left; reflexivity.
-    + destruct (f x').
-      * apply IHxs'; auto.
-      * right; apply IHxs'; auto.
+  - intros acc x [[_ []]|]; auto.
+  - intros acc x [[fx [Heq|HIn]]|Q]; simpl.
+    + rewrite Heq, fx. simpl.
+      apply IHxs'; right; now left.
+    + destruct (f x'); apply IHxs'; left; now split.
+    + destruct (f x'); apply IHxs'.
+      -- now right.
+      -- right; now right.
 Qed.
+
+Lemma In_filter_Nones_aux_iff {X Y} (f : X -> option Y) (xs : list X) :
+  forall acc x, In x (filter_Nones_aux acc f xs) <-> (f x = None /\ In x xs) \/ In x acc.
+Proof.
+  intros; split.
+  - apply In_filter_Nones_aux_correct1.
+  - apply In_filter_Nones_aux_correct2.
+Qed.
+
+Definition filter_Nones {X Y} (f : X -> option Y) (xs : list X) : list X :=
+  filter_Nones_aux [] f xs.
 
 Lemma In_filter_Nones_iff {X Y} (f : X -> option Y) (xs : list X) :
   forall x, In x (filter_Nones f xs) <-> f x = None /\ In x xs.
 Proof.
-  intro; split.
-  - apply In_filter_Nones_correct1.
-  - apply In_filter_Nones_correct2.
+  intro.
+  unfold filter_Nones.
+  rewrite In_filter_Nones_aux_iff; simpl; tauto.
 Qed.
 
 Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
