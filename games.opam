@@ -2,23 +2,25 @@ opam-version: "2.0"
 maintainer: "emarzion@gmail.com"
 version: "dev"
 
-homepage: "https://github.com/emarzion/games"
-dev-repo: "git+https://github.com/emarzion/games.git"
-bug-reports: "https://github.com/emarzion/games/issues"
+homepage: "https://github.com/emarzion/coqtbgen"
+dev-repo: "git+https://github.com/emarzion/coqtbgen.git"
+bug-reports: "https://github.com/emarzion/coqtbgen/issues"
 license: "GPL"
 
-synopsis: "Games library"
+synopsis: "Games library and Tablebase generator"
 
 build: [
-  ["./configure.sh"]
-  [make "-j%{jobs}%"]
+  [dune build]
 ]
-install: [make "install"]
+install: [dune install]
 
 depends: [
-  "ocaml" {= "4.14.0"}
-  "coq" {(= "8.15.2")}
-  "coq-equations" {>= "1.3"}
+  "ocaml" {>= "4.14.0"}
+  "coq" {>= "8.15.2"}
+  "js_of_ocaml" {>= "5.4.0"}
+  "js_of_ocaml-lwt" {>= "5.4.0"}
+  "js_of_ocaml-ppx" {>= "5.4.0"}
+  "js_of_ocaml-tyxml" {>= "5.4.0"}
 ]
 
 authors: [
