@@ -18,3 +18,15 @@
    --source-map
    --file
    %{dep:../gen/tb.txt}:/static/tb.txt)))
+
+(rule
+  (targets style.css)
+  (deps style.raw.css)
+  (action
+    (run cp style.raw.css style.css)))
+
+(rule
+  (targets index.html)
+  (deps index.raw.html)
+  (action
+    (run cp index.raw.html index.html)))
