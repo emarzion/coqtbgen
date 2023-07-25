@@ -457,7 +457,7 @@ Proof.
     + now exists (Win White).
 Defined.
 
-Axiom cheat : forall {X}, X.
+Axiom cheat : forall {X},X.
 
 Global Instance BearGameStateShow {G} `{sh : Show (Vert G)}
   `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh} : Show (GameState (BearGame G)).
@@ -467,6 +467,8 @@ Proof.
     show := fun s => "(" ++ show (to_play s) ++ "," ++ show (bear s) ++ "," ++ show (hunters s) ++ ")";
     show_inj := _
   |}.
+  intros s s' pf.
+  inversion pf.
   apply cheat.
 Defined.
 
@@ -486,10 +488,21 @@ Proof.
     hunters_distinct := _;
     bear_not_hunter := _
   |}.
+  - unfold hunter_lists in HIn.
+    eapply sublist_sort; eauto.
+    apply sorted_filter.
+    apply enum_sorted.
+    apply cheat.
+  - unfold hunter_lists in HIn.
+    eapply sublist_length; eauto.
   - apply cheat.
-  - apply cheat.
-  - apply cheat.
-  - apply cheat.
+  - intro pf.
+    pose proof (sublist_In_trans _ _ _ _ pf HIn) as pf'.
+    rewrite filter_In in pf'.
+    unfold eqb in pf'.
+    destruct (eq_dec b b).
+    + destruct pf'; discriminate.
+    + apply n; reflexivity.
 Defined.
 
 Global Instance Fin_BearGame {G} : FinGame (BearGame G).
@@ -539,7 +552,18 @@ Proof.
 Defined.
 
 Global Instance Nice_BearGame {G} : NiceGame (BearGame G).
-Admitted.
+Proof.
+  constructor.
+  intros s pl pf.
+  unfold Game.atomic_res in pf.
+  simpl in pf.
+  unfold atomic_res in pf.
+  destruct enum_moves; [|discriminate].
+  unfold Game.to_play; simpl.
+  destruct to_play; [discriminate|].
+  now inversion pf.
+Defined.
+
 
 Global Instance DiscMove_BearGame {G} (s : GameState (BearGame G))
   : Discrete (Move s).

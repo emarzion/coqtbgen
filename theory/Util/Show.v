@@ -2,6 +2,7 @@ Require Import Ascii.
 Open Scope char.
 
 Require Import String.
+Require Import Lia.
 Require List.
 Import List.ListNotations.
 Open Scope string_scope.
@@ -30,7 +31,8 @@ Fixpoint char_free (c : ascii) (str : string) : Prop :=
 Lemma char_free_app (c : ascii) (str str' : string) :
   char_free c (str ++ str') <-> char_free c str /\ char_free c str'.
 Proof.
-Admitted.
+  split; induction str; simpl; tauto.
+Qed.
 
 Lemma char_free_split : forall {c s t u v},
   s ++ (String c t) = u ++ (String c v) ->
@@ -78,9 +80,38 @@ Proof.
   now rewrite (show_inj _ _ H5).
 Defined.
 
-Lemma string_app_lemma (pre pre' suff : string) :
+Lemma string_app_length : forall {pre suff},
+  String.length (pre ++ suff) =
+  String.length pre + String.length suff.
+Proof.
+  induction pre; intros suff.
+  - reflexivity.
+  - simpl.
+    now rewrite IHpre.
+Qed.
+
+Lemma string_app_lemma : forall (pre pre' suff : string),
   pre ++ suff = pre' ++ suff -> pre = pre'.
-Admitted.
+Proof.
+  induction pre; intros pre' suff.
+  - destruct pre'; intro pf.
+    + reflexivity.
+    + symmetry in pf.
+      simpl append at 2 in pf.
+      absurd (String.length (String a pre' ++ suff) =
+        String.length suff); [|congruence].
+      rewrite (string_app_length); simpl.
+      lia.
+  - destruct pre'; intro pf.
+    + simpl append at 2 in pf.
+      absurd (String.length (String a pre ++ suff) =
+        String.length suff); [|congruence].
+      rewrite (string_app_length); simpl.
+      lia.
+    + inversion pf.
+      apply f_equal.
+      eapply IHpre; eauto.
+Qed.
 
 Global Instance Show_list {X} `{sh : Show X}
   `{@SemicolonFree X sh, @Nonnil X sh} : Show (list X).

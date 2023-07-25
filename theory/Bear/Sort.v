@@ -102,3 +102,124 @@ Fixpoint sublists {X} n (xs : list X) {struct xs} : list (list X) :=
     end
   end.
 
+Lemma sublist_length {X} (xs : list X) : forall n ys,
+  In ys (sublists n xs) -> length ys = n.
+Proof.
+  induction xs; intros n ys Hys.
+  - destruct ys; simpl in Hys.
+    + destruct n; [reflexivity|destruct Hys].
+    + destruct n; now inversion Hys.
+  - simpl in Hys.
+    destruct n.
+    + inversion Hys as [H|H];
+      now destruct H.
+    + rewrite in_app_iff in Hys.
+      destruct Hys as [H|H].
+      * rewrite in_map_iff in H.
+        destruct H as [l [Hl1 Hl2]].
+        rewrite <- Hl1; simpl.
+        now rewrite (IHxs _ _ Hl2).
+      * now apply IHxs.
+Qed.
+
+Lemma sublist_In_trans {X} (xs : list X)
+  : forall n x ys, In x ys -> In ys (sublists n xs) -> In x xs.
+Proof.
+  induction xs; intros n x ys Hx Hys.
+  - simpl in Hys.
+    destruct n.
+    + destruct Hys as [H|H].
+      * congruence.
+      * destruct H.
+    + destruct Hys.
+  - simpl in Hys.
+    destruct n.
+    + destruct Hys as [H|H].
+      * rewrite <- H in Hx; destruct Hx.
+      * destruct H.
+    + rewrite in_app_iff in Hys.
+      destruct Hys.
+      * rewrite in_map_iff in H.
+        destruct H as [l [Hl1 Hl2]].
+        rewrite <- Hl1 in Hx.
+        destruct Hx.
+        -- now left.
+        -- right; eapply IHxs; eauto.
+      * right; eapply IHxs; eauto.
+Qed.
+
+Lemma sublist_Forall {X} (xs : list X) (P : X -> Prop)
+  : Forall P xs -> forall n ys, In ys (sublists n xs) ->
+    Forall P ys.
+Proof.
+  induction xs; intros Hxs n ys Hys.
+  - destruct n; simpl in Hys.
+    + destruct Hys as [[]|[]].
+      constructor.
+    + destruct Hys.
+  - destruct n; simpl in Hys.
+    + destruct Hys as [[]|[]].
+      constructor.
+    + rewrite in_app_iff in Hys.
+      destruct Hys as [pf|pf].
+      * rewrite in_map_iff in pf.
+        destruct pf as [l [[] Hl2]].
+        inversion Hxs; constructor; auto.
+        eapply IHxs; eauto.
+      * eapply IHxs; eauto.
+        now inversion Hxs.
+Qed.
+
+Lemma sublist_sort {X} `{Ord X} (xs : list X) :
+  forall n ys, In ys (sublists n xs) ->
+  sorted xs -> sorted ys.
+Proof.
+  unfold sorted.
+  induction xs; intros n ys Hys xs_sort.
+  - destruct n; simpl in Hys.
+    + destruct Hys as [pf|[]].
+      rewrite <- pf.
+      constructor.
+    + destruct Hys.
+  - destruct n; simpl in Hys.
+    + destruct Hys as [pf|[]].
+      rewrite <- pf.
+      constructor.
+    + rewrite in_app_iff in Hys.
+      destruct Hys as [pf|pf].
+      * rewrite in_map_iff in pf.
+        destruct pf as [l [Hl1 Hl2]].
+        rewrite <- Hl1.
+        inversion xs_sort.
+        constructor.
+        -- eapply IHxs; eauto.
+        -- eapply sublist_Forall; eauto.
+      * inversion xs_sort.
+        eapply IHxs; eauto.
+Qed.
+
+Lemma filter_Forall {X} (xs : list X)
+  (P : X -> Prop) (p : X -> bool) :
+  Forall P xs -> Forall P (filter p xs).
+Proof.
+  induction xs; intros Hxs.
+  - constructor.
+  - inversion Hxs.
+    simpl; destruct (p a).
+    + constructor; auto.
+    + now apply IHxs.
+Qed.
+
+Lemma sorted_filter {X} `{Ord X} (p : X -> bool) (xs : list X) :
+  sorted xs -> sorted (filter p xs).
+Proof.
+  induction xs; intros xs_sort.
+  - constructor.
+  - simpl.
+    inversion xs_sort.
+    destruct (p a).
+    + constructor.
+      * now apply IHxs.
+      * now apply filter_Forall.
+    + now apply IHxs.
+Qed.
