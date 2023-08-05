@@ -86,37 +86,6 @@ Arguments h_dest_not_bear {_} {_}.
 Inductive BG_Move {G} (s : BG_State G) : Type :=
   | BearMove : to_play s = Black -> BearMv s -> BG_Move s
   | HunterMove : to_play s = White -> HunterMv s -> BG_Move s.
-(* 
-Lemma shuffle1 {X} {w x y z : X} :
-  NoDup [x;w;y;z] -> NoDup [w;x;y;z].
-Proof.
-  intros pf.
-  inversion pf.
-  inversion H5.
-  inversion H9.
-  repeat constructor; simpl in *; firstorder.
-Qed.
-
-Lemma shuffle2 {X} {w x y z : X} :
-  NoDup [y;x;w;z] -> NoDup [w;x;y;z].
-Proof.
-  intros pf.
-  inversion pf.
-  inversion H5.
-  inversion H9.
-  repeat constructor; simpl in *; firstorder.
-Qed.
-
-Lemma shuffle3 {X} {w x y z : X} :
-  NoDup [z;x;y;w] -> NoDup [w;x;y;z].
-Proof.
-  intros pf.
-  inversion pf.
-  inversion H5.
-  inversion H9.
-  repeat constructor; simpl in *; firstorder.
-Qed.
- *)
 
 Lemma no_remove_id {X} `{Discrete X}
   (x : X) (xs : list X) :
@@ -231,6 +200,28 @@ Proof.
     + apply (pf_map _ _ xs).
       intros x' HIn.
       apply (f x').
+      now right.
+Defined.
+
+Inductive dep_data X (P : X -> Prop) (Q : forall x, P x -> Prop) : Type :=
+ | mk_dep_data : forall x (pf : P x), Q x pf -> dep_data X P Q.
+
+Lemma in_pf_map_sig {X Y} `{Discrete Y} {xs : list X} {f : forall x, In x xs -> Y} :
+  forall {y}, In y (pf_map xs f) ->
+  dep_data X (fun x => In x xs) (fun x pf => f x pf = y /\ In x xs).
+Proof.
+  induction xs; intros y HIn.
+  - destruct HIn.
+  - simpl in HIn.
+    destruct (eq_dec (f a (or_introl eq_refl)) y).
+    + unshelve econstructor; [exact a| now left |].
+      split; auto.
+      now left.
+    + assert (In y (pf_map xs (fun x'
+        HIn => f x' (or_intror HIn)))) as G by tauto.
+      destruct (IHxs _ _ G) as [x pf [Hpf1 Hpf2]].
+      unshelve econstructor; [exact x| right; exact pf |].
+      split; auto.
       now right.
 Defined.
 
@@ -457,7 +448,27 @@ Proof.
     + now exists (Win White).
 Defined.
 
-Axiom cheat : forall {X},X.
+Lemma app_l_cancel : forall pre suff suff',
+  (pre ++ suff = pre ++ suff') -> suff = suff'.
+Proof.
+  induction pre; intros suff suff'.
+  - simpl; auto.
+  - simpl; intro pf.
+    apply IHpre.
+    now inversion pf.
+Qed.
+
+Lemma BG_State_ext {G} (s s' : BG_State G) :
+  to_play s = to_play s' ->
+  bear s = bear s' ->
+  hunters s = hunters s' ->
+  s = s'.
+Proof.
+  intros pf1 pf2 pf3.
+  destruct s, s'; simpl in *.
+  destruct pf1, pf2, pf3.
+  f_equal; apply proof_irrelevance.
+Qed.
 
 Global Instance BearGameStateShow {G} `{sh : Show (Vert G)}
   `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh} : Show (GameState (BearGame G)).
@@ -468,13 +479,58 @@ Proof.
     show_inj := _
   |}.
   intros s s' pf.
-  inversion pf.
-  apply cheat.
+  assert (to_play s = to_play s') as pf1.
+  { destruct (to_play s), (to_play s');
+      (discriminate || reflexivity).
+  }
+  assert (bear s = bear s') as pf2.
+  { destruct pf1.
+    pose proof (app_l_cancel ("(" ++ show (to_play s)) _ _ pf)
+      as pf'; clear pf.
+    pose proof (app_l_cancel "," _ _ pf') as pf.
+    apply show_inj.
+    apply (char_free_split pf); apply comma_free.
+  }
+  assert (hunters s = hunters s').
+  { destruct pf1, pf2.
+    pose proof (app_l_cancel ("(" ++ show (to_play s)) _ _ pf)
+      as pf'; clear pf.
+    pose proof (app_l_cancel ("," ++ show (bear s)) _ _ pf') as pf; clear pf'.
+    pose proof (app_l_cancel "," _ _ pf) as pf'; clear pf.
+    apply show_inj.
+    exact (string_app_lemma _ _ ")" pf').
+  }
+  now apply BG_State_ext.
 Defined.
+
+Lemma NoDup_sublists {X} : forall (xs : list X) n,
+  NoDup xs -> forall ys, In ys (sublists n xs) -> NoDup ys.
+Proof.
+  intro xs.
+  induction xs as [|x xs']; intros n pf.
+  - intros ys Hys; simpl in Hys.
+    destruct n.
+    + destruct Hys as [[]|[]]; auto.
+    + destruct Hys.
+  - intros ys Hys; simpl in Hys.
+    destruct n.
+    + destruct Hys as [[]|[]]; constructor.
+    + rewrite in_app_iff in Hys; destruct Hys as [Hys|].
+      * rewrite in_map_iff in Hys.
+        destruct Hys as [l [[] Hl]].
+        constructor.
+        -- intro Hx.
+           pose proof (sublist_In_trans _ _ _ _ Hx Hl).
+           now inversion pf.
+        -- inversion pf.
+           now apply (IHxs' n).
+      * inversion pf.
+        now apply (IHxs' (S n)).
+Qed.
 
 Definition all_BG_States (pl : Player) {G} : list (BG_State G).
 Proof.
-  refine (List.concat (List.map _ (enum : list (Vert G)))).
+  refine (List.concat (List.map _ enum)).
   intro b.
   pose (hunter_lists := sublists 3 (filter (fun h => negb (eqb h b)) enum)).
   refine (pf_map hunter_lists _).
@@ -492,10 +548,12 @@ Proof.
     eapply sublist_sort; eauto.
     apply sorted_filter.
     apply enum_sorted.
-    apply cheat.
+    apply Vert_NoDup.
   - unfold hunter_lists in HIn.
     eapply sublist_length; eauto.
-  - apply cheat.
+  - eapply NoDup_sublists; [|exact HIn].
+    apply NoDup_filter.
+    apply Vert_NoDup.
   - intro pf.
     pose proof (sublist_In_trans _ _ _ _ pf HIn) as pf'.
     rewrite filter_In in pf'.
@@ -503,52 +561,6 @@ Proof.
     destruct (eq_dec b b).
     + destruct pf'; discriminate.
     + apply n; reflexivity.
-Defined.
-
-Global Instance Fin_BearGame {G} : FinGame (BearGame G).
-Proof.
-  unshelve econstructor.
-  - exact (all_BG_States White ++ all_BG_States Black)%list.
-  - intro pl.
-    destruct pl eqn:?.
-    + refine (filter _ (all_BG_States Black)).
-      exact (fun s =>
-        match enum_moves s with
-        | [] => true
-        | _ => false
-        end).
-    + exact [].
-  - apply cheat.
-  - apply cheat.
-  - apply cheat.
-Defined.
-
-Definition switch_player {G} (s : BG_State G) : BG_State G := {|
-  to_play := opp (to_play s);
-  bear := bear s;
-  hunters := hunters s;
-  hunters_sort := hunters_sort G s;
-  hunters_3 := hunters_3 G s;
-  hunters_distinct := hunters_distinct s;
-  bear_not_hunter := bear_not_hunter s
-  |}.
-
-Global Instance Reversible_BearGame {G} : Reversible (BearGame G).
-Proof.
-  unshelve econstructor.
-  - intro s.
-    exact (List.map (fun m => switch_player (exec_move m)) (enum_moves (switch_player s))).
-  - intros s s' HIn.
-    unshelve eexists.
-    constructor.
-    apply cheat.
-    unshelve econstructor.
-    apply s.
-    apply cheat.
-    apply cheat.
-    apply cheat.
-  - intros.
- apply cheat.
 Defined.
 
 Global Instance Nice_BearGame {G} : NiceGame (BearGame G).
@@ -564,6 +576,346 @@ Proof.
   now inversion pf.
 Defined.
 
+Global Instance BG_State_Disc {G}
+  : Discrete (BG_State G).
+Proof.
+  constructor; intros s s'.
+  destruct (eq_dec (to_play s) (to_play s'));
+    [|right; congruence].
+  destruct (eq_dec (bear s) (bear s'));
+    [|right; congruence].
+  destruct (eq_dec (hunters s) (hunters s'));
+    [|right; congruence].
+  left.
+  destruct s, s'; simpl in *.
+  destruct e,e0,e1.
+  f_equal; apply proof_irrelevance.
+Defined.
+
+Lemma all_BG_States_correct {G} : forall pl (s : BG_State G),
+  to_play s = pl -> In s (all_BG_States pl).
+Proof.
+  intros.
+  unfold all_BG_States.
+  rewrite in_concat.
+  eexists.
+  rewrite in_map_iff.
+  split.
+  - exists (bear s).
+    split; [reflexivity|].
+    apply enum_correct.
+  - rewrite in_pf_map_iff.
+    exists (hunters s).
+    unshelve eexists.
+    + apply in_sublists.
+      * apply NoDup_filter.
+        apply G.
+      * apply sorted_filter.
+        apply enum_sorted.
+        apply G.
+      * apply s.
+      * apply s.
+      * intros y Hy.
+        rewrite filter_In.
+        split; [apply enum_correct|].
+        unfold eqb.
+        destruct eq_dec as [pf|]; [|reflexivity].
+        elim (bear_not_hunter s); congruence.
+      * apply s.
+    + split.
+      * apply BG_State_ext; simpl.
+        -- now symmetry.
+        -- reflexivity.
+        -- reflexivity.
+      * apply in_sublists.
+        -- apply NoDup_filter.
+           apply G.
+        -- apply sorted_filter.
+           apply enum_sorted.
+           apply G.
+        -- apply s.
+        -- apply s.
+        -- intros y Hy.
+           rewrite filter_In.
+           split; [apply enum_correct|].
+           unfold eqb.
+           destruct eq_dec as [pf|]; [|reflexivity].
+           elim (bear_not_hunter s); congruence.
+        -- apply s.
+Qed.
+
+Global Instance Fin_BearGame {G} : FinGame (BearGame G).
+Proof.
+  unshelve econstructor.
+  - exact (all_BG_States White ++ all_BG_States Black)%list.
+  - intro pl.
+    destruct pl eqn:?.
+    + refine (filter _ (all_BG_States Black)).
+      exact (fun s =>
+        match enum_moves s with
+        | [] => true
+        | _ => false
+        end).
+    + exact [].
+  - intro s.
+    rewrite in_app_iff.
+    destruct (to_play s) eqn:s_play.
+    + left.
+      now apply all_BG_States_correct.
+    + right.
+      now apply all_BG_States_correct.
+  - intros s [] pf; simpl in pf.
+    + simpl.
+      unfold atomic_res.
+      rewrite filter_In in pf.
+      destruct (enum_moves s).
+      * destruct pf as [pf _].
+        unfold all_BG_States in pf.
+        rewrite in_concat in pf.
+        destruct pf as [l [Hl1 Hl2]].
+        rewrite in_map_iff in Hl1.
+        destruct Hl1 as [v [Hv _]].
+        rewrite <- Hv in Hl2; clear Hv.
+        rewrite in_pf_map_iff in Hl2.
+        destruct Hl2 as [l' [pf [Hl' _]]].
+        now rewrite <- Hl'.
+      * now destruct pf.
+    + destruct pf.
+  - intros s pl s_res; simpl.
+    destruct pl.
+    + rewrite filter_In; split.
+      * apply all_BG_States_correct.
+        simpl in s_res.
+        unfold atomic_res in s_res.
+        destruct (enum_moves s); [|discriminate].
+        destruct (to_play s); [discriminate|reflexivity].
+      * simpl in s_res.
+        unfold atomic_res in s_res.
+        destruct (enum_moves s); [|discriminate].
+        destruct (to_play s); auto.
+    + simpl in *.
+      unfold atomic_res in s_res.
+      destruct (enum_moves s); [|discriminate].
+      destruct (to_play s); discriminate.
+Defined.
+
+Axiom cheat : forall {X},X.
+
+Global Instance Reversible_BearGame {G} : Reversible (BearGame G).
+Proof.
+  unshelve econstructor.
+  - intro s.
+    destruct (to_play s) eqn:s_play.
+    + refine (pf_map
+        (filter (fun b => negb (in_decb b (hunters s)))
+          (predecessors (bear s)))
+        (fun b pf => {|
+          to_play := Black;
+          bear := b;
+          hunters := hunters s;
+          hunters_sort := hunters_sort G s;
+          hunters_3 := hunters_3 G s;
+          hunters_distinct := hunters_distinct s;
+          bear_not_hunter := _
+        |})).
+      rewrite filter_In in pf.
+      destruct pf as [_ pf].
+      unfold in_decb in pf.
+      destruct in_dec; [discriminate|auto].
+    + refine (List.concat (pf_map (hunters s) (fun h pf_h => _))).
+      refine (pf_map
+        (filter (fun h' => orb (negb (in_decb h' (bear s :: hunters s))) (eqb h' h))
+          (predecessors h))
+        (fun h' pf => {|
+          to_play := White;
+          bear := bear s;
+          hunters := insertion_sort (h' :: (remove h (hunters s)));
+          hunters_sort := _;
+          hunters_3 := _;
+          hunters_distinct := _;
+          bear_not_hunter := _
+        |})).
+      * apply insertion_sort_sorts.
+      * rewrite insertion_sort_length.
+        simpl; f_equal.
+        erewrite remove_length; [reflexivity | | |].
+        -- apply s.
+        -- exact pf_h.
+        -- apply s.
+      * apply insertion_sort_NoDup.
+        constructor.
+        -- rewrite In_remove_iff.
+           intros [Hh'h Hh'].
+           rewrite filter_In in pf.
+           destruct pf as [_ pf].
+           unfold in_decb in pf.
+           destruct in_dec.
+           ++ simpl in pf.
+              unfold eqb in pf.
+              destruct eq_dec; [contradiction|discriminate].
+           ++ elim n; now right.
+        -- apply NoDup_remove.
+           apply s.
+      * rewrite insertion_sort_In.
+        rewrite filter_In in pf.
+        destruct pf as [pf1 pf2].
+        rewrite Bool.orb_true_iff in pf2.
+        destruct pf2 as [pf2|pf2].
+        -- rewrite Bool.negb_true_iff in pf2.
+           unfold in_decb in pf2.
+           destruct in_dec; [discriminate|].
+           intros [pf|pf].
+           ++ apply n; now left.
+           ++ rewrite In_remove_iff in pf.
+              now apply s.
+        -- unfold eqb in pf2.
+           destruct eq_dec; [|discriminate].
+           destruct e.
+           intros [Hbear|Hbear].
+           ++ rewrite Hbear in pf_h.
+              now apply s.
+           ++ rewrite In_remove_iff in Hbear.
+              now apply s.
+  - intros s s' pf.
+    simpl in pf.
+    destruct (to_play s') eqn:s'_play.
+    + destruct (in_pf_map_sig pf) as [v pf' [Hv1 Hv2]].
+      unshelve eexists.
+      * apply BearMove.
+        -- now rewrite <- Hv1.
+        -- unshelve eexists.
+           ++ exact (bear s').
+           ++ rewrite <- Hv1; simpl.
+              rewrite filter_In in Hv2.
+              destruct Hv2 as [Hv3 _].
+              now rewrite <- predecessors_correct in Hv3.
+           ++ rewrite <- Hv1; simpl.
+              apply s'.
+      * apply BG_State_ext; simpl.
+        -- auto.
+        -- reflexivity.
+        -- now rewrite <- Hv1.
+    + destruct (in_concat_sig _ _ pf)
+        as [l [Hl1 Hl2]]; clear pf.
+      destruct (in_pf_map_sig Hl1) as [v pf [Hv1 Hv2]]; clear Hl1.
+      rewrite <- Hv1 in Hl2; clear Hv1.
+      destruct (in_pf_map_sig Hl2) as [v' pf' [Hv'1 Hv'2]]; clear Hl2.
+      unshelve eexists.
+      * apply HunterMove.
+        -- now rewrite <- Hv'1.
+        -- unshelve eexists.
+           ++ exact v'.
+           ++ exact v.
+           ++ rewrite <- Hv'1; simpl.
+              rewrite insert_In; now left.
+           ++ rewrite filter_In in Hv'2.
+              destruct Hv'2 as [Hv'3 _].
+              now rewrite predecessors_correct.
+           ++ rewrite <- Hv'1; simpl.
+              intro Heq.
+              apply s'; congruence.
+           ++ rewrite <- Hv'1; simpl.
+              rewrite insert_In.
+              intros [Hv'3|Hv'3]; [auto|].
+              rewrite insertion_sort_In in Hv'3.
+              now rewrite In_remove_iff in Hv'3.
+      * apply BG_State_ext.
+        -- simpl; congruence.
+        -- simpl.
+           now rewrite <- Hv'1.
+        -- simpl.
+           rewrite <- Hv'1; simpl.
+           apply cheat.
+  - intros.
+    simpl.
+    destruct (to_play (exec_move m)) eqn:m_play.
+    + rewrite in_pf_map_iff.
+      exists (bear s).
+      unfold exec_move in m_play.
+      destruct m; [|discriminate].
+      unshelve eexists.
+      * rewrite filter_In; split.
+        -- simpl; rewrite <- predecessors_correct.
+           apply b.
+        -- simpl; unfold in_decb.
+           destruct in_dec; [|reflexivity].
+           elim (bear_not_hunter s i).
+      * split.
+        -- apply BG_State_ext.
+           ++ simpl; auto.
+           ++ reflexivity.
+           ++ reflexivity.
+        -- rewrite filter_In.
+           split.
+           ++ simpl; rewrite <- predecessors_correct.
+              apply b.
+           ++ simpl; unfold in_decb.
+              destruct in_dec; [|reflexivity].
+              elim (bear_not_hunter s i).
+    + simpl.
+      unfold exec_move in m_play.
+      destruct m; [discriminate|].
+      clear m_play.
+      rewrite in_concat.
+      eexists.
+      rewrite in_pf_map_iff; split.
+      * exists (h_dest h).
+        unshelve eexists.
+        -- simpl; rewrite insert_In.
+           now left.
+        -- split; [reflexivity|].
+           simpl; rewrite insert_In.
+           now left.
+      * rewrite in_pf_map_iff.
+        exists (h_orig h).
+        unshelve eexists.
+        -- rewrite filter_In.
+           split.
+           ++ rewrite <- predecessors_correct.
+              apply h.
+           ++ rewrite Bool.orb_true_iff.
+              unfold in_decb.
+              destruct in_dec as [pf|pf]; [|now left].
+              right.
+              destruct pf as [pf|pf].
+              ** simpl in pf.
+                 elim (bear_not_hunter s).
+                 rewrite pf; apply h.
+              ** simpl in pf.
+                 rewrite insert_In in pf.
+                 unfold eqb.
+                 destruct eq_dec as [|pf']; [reflexivity|].
+                 destruct pf as [|pf]; [congruence|].
+                 rewrite insertion_sort_In in pf.
+                 rewrite In_remove_iff in pf.
+                 destruct pf; contradiction.
+        -- simpl; split.
+           ++ apply BG_State_ext.
+              ** simpl; auto.
+              ** reflexivity.
+              ** simpl.
+                 apply cheat.
+           ++ rewrite filter_In.
+              split.
+              ** rewrite <- predecessors_correct.
+                 apply h.
+              ** rewrite Bool.orb_true_iff.
+              unfold in_decb.
+              destruct in_dec as [pf|pf]; [|now left].
+              right.
+              destruct pf as [pf|pf].
+              --- simpl in pf.
+                  elim (bear_not_hunter s).
+                  rewrite pf; apply h.
+              --- simpl in pf.
+                  rewrite insert_In in pf.
+                  unfold eqb.
+                  destruct eq_dec as [|pf']; [reflexivity|].
+                  destruct pf as [|pf]; [congruence|].
+                  rewrite insertion_sort_In in pf.
+                  rewrite In_remove_iff in pf.
+                  destruct pf; contradiction.
+Defined.
 
 Global Instance DiscMove_BearGame {G} (s : GameState (BearGame G))
   : Discrete (Move s).
@@ -595,10 +947,3 @@ Definition Bear_TB (G : Graph) `{sh : Show (Vert G)}
   `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh}
   : CorrectTablebase OM
   (BearGame G) := certified_TB.
-
-
-
-
-
-
-

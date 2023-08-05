@@ -17,16 +17,70 @@ Record Graph : Type := {
   Vert_disc : Discrete Vert;
   Vert_enum : Enum Vert;
 
+  Vert_NoDup : NoDup enum;
+
   successors : Vert -> list Vert;
   }.
 
 Arguments successors {_} _.
+
+Lemma in_dec {X} `{Discrete X} (x : X) (xs : list X) :
+  { In x xs } + { ~ In x xs }.
+Proof.
+  induction xs as [|x' xs']; simpl.
+  - now right.
+  - destruct (eq_dec x' x).
+    + left; now left.
+    + destruct IHxs'.
+      * left; now right.
+      * right; intros [|]; contradiction.
+Defined.
+
+Definition in_decb {X} `{Discrete X} (x : X) (xs : list X) :=
+  match in_dec x xs with
+  | left _ => true
+  | right _ => false
+  end.
 
 Global Instance Graph_Vert_disc (G : Graph) : Discrete (Vert G) :=
   Vert_disc G.
 
 Global Instance Graph_Vert_enum (G : Graph) : Enum (Vert G) :=
   Vert_enum G.
+
+Definition predecessors {G} (v : Vert G) : list (Vert G) :=
+  filter (fun v' =>
+    in_decb v (successors v')) enum.
+
+Lemma predecessors_correct_1 {G} (v v' : Vert G) :
+  In v' (successors v) -> In v (predecessors v').
+Proof.
+  intro pf.
+  unfold predecessors.
+  rewrite filter_In.
+  split; [apply enum_correct|].
+  unfold in_decb.
+  destruct in_dec; [reflexivity|contradiction].
+Qed.
+
+Lemma predecessors_correct_2 {G} (v v' : Vert G) :
+  In v (predecessors v') -> In v' (successors v).
+Proof.
+  intro pf.
+  unfold predecessors in pf.
+  rewrite filter_In in pf.
+  destruct pf as [_ pf].
+  unfold in_decb in pf.
+  destruct in_dec in pf; [auto|discriminate].
+Qed.
+
+Lemma predecessors_correct {G} (v v' : Vert G) :
+  In v' (successors v) <-> In v (predecessors v').
+Proof.
+  intros; split.
+  - apply predecessors_correct_1.
+  - apply predecessors_correct_2.
+Qed.
 
 Fixpoint first_index_aux {X} `{Discrete X} n xs (x : X) : option nat :=
   match xs with
@@ -138,15 +192,15 @@ Proof.
     destruct (Compare_dec.le_le_S_dec a b).
     + now left.
     + right; lia.
+  - intros x y.
+    unfold opt_le.
+    destruct (first_index_aux_In 0 (enum_correct x)) as [a Ha].
+    destruct (first_index_aux_In 0 (enum_correct y)) as [b Hb].
+    rewrite Ha, Hb.
+    intros.
+    eapply first_index_aux_inj; eauto.
+    lia.
 Defined.
-
-(*
-H2 : Forall (R (f a)) (map f xs)
-H : a0 = f a
-H0 : l = map f xs
-______________________________________(1/1)
-Forall (fun y : X => R (f a) (f y)) xs
-*)
 
 Lemma Forall_map_lemma {X Y} (f : X -> Y) (P : Y -> Prop) : forall xs,
   Forall P (map f xs) -> Forall (fun x => P (f x)) xs.

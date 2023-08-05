@@ -2198,7 +2198,6 @@ Defined.
 Definition optimal {G} {pl} {s : GameState G} (str : strategy pl s) : Prop :=
   forall str', exists opp, pref pl (trace s str opp) (trace s str' opp).
 
-Axiom tb_strat
 
 *)
 
