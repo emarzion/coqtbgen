@@ -699,7 +699,99 @@ Proof.
       destruct (to_play s); discriminate.
 Defined.
 
-Axiom cheat : forall {X},X.
+Lemma remove_insert {X} `{Ord X, Discrete X} xs (x : X) :
+  (~ In x xs) ->
+  remove x (insert x xs) = xs.
+Proof.
+  induction xs as [|y ys]; intro HnIn; simpl.
+  - destruct eq_dec; [reflexivity|contradiction].
+  - destruct (ord_le_dec x y).
+    + simpl; destruct eq_dec; [|contradiction].
+      destruct (eq_dec x y).
+      * elim HnIn; now left.
+      * rewrite no_remove_id; [reflexivity|].
+        simpl in HnIn; tauto.
+    + simpl; destruct eq_dec.
+      * elim HnIn; now left.
+      * rewrite IHys; [reflexivity|].
+        simpl in HnIn; tauto.
+Qed.
+
+Lemma insert_cons {X} `{Ord X} : forall (x : X) xs,
+  sorted (x :: xs) -> insert x xs = x :: xs.
+Proof.
+  intros x xs xs_sort.
+  induction xs as [|y ys].
+  - reflexivity.
+  - simpl.
+    inversion xs_sort as [|? ? _ xs_bound Heq].
+    destruct ord_le_dec; [reflexivity|].
+    assert (x = y) as pf.
+    { apply ord_le_antisym; auto.
+      rewrite Forall_forall in xs_bound.
+      apply xs_bound; now left.
+    }
+    rewrite pf in *.
+    rewrite IHys; auto.
+    now inversion xs_sort.
+Qed.
+
+Lemma insert_remove {X} `{Ord X, Discrete X} xs (x : X) :
+  sorted xs -> NoDup xs -> In x xs ->
+  insert x (remove x xs) = xs.
+Proof.
+  induction xs as [|y ys]; intros xs_sort xs_nd HIn.
+  - destruct HIn.
+  - destruct HIn as [Heq|HIn].
+    + simpl.
+      destruct (eq_dec x y); [|congruence].
+      rewrite no_remove_id.
+      * rewrite e.
+        now apply insert_cons.
+      * rewrite e in *.
+        now inversion xs_nd.
+    + simpl.
+      destruct (eq_dec x y).
+      * rewrite e in *.
+        now inversion xs_nd.
+      * simpl.
+        destruct ord_le_dec.
+        -- elim n.
+           apply ord_le_antisym; auto.
+           inversion xs_sort as [|? ? ys_sort ys_bound].
+           rewrite Forall_forall in ys_bound.
+           now apply ys_bound.
+        -- rewrite IHys; auto.
+           ++ now inversion xs_sort.
+           ++ now inversion xs_nd.
+Qed.
+
+Lemma insertion_sort_idem {X} `{Ord X} xs :
+  sorted xs -> insertion_sort xs = xs.
+Proof.
+  induction xs; intros xs_sort.
+  - reflexivity.
+  - simpl.
+    rewrite IHxs; [|now inversion xs_sort].
+    now apply insert_cons.
+Qed.
+
+Lemma remove_sorted {X} `{Ord X, Discrete X} xs :
+  sorted xs -> forall x, sorted (remove x xs).
+Proof.
+  induction xs as [|y ys]; intros xs_sort x.
+  - constructor.
+  - simpl.
+    destruct (eq_dec x y).
+    + apply IHys; now inversion xs_sort.
+    + constructor.
+      * apply IHys; now inversion xs_sort.
+      * inversion xs_sort as [|? ? ys_sort ys_bound].
+        rewrite Forall_forall in *.
+        intros z Hz.
+        apply ys_bound.
+        now rewrite In_remove_iff in Hz.
+Qed.
 
 Global Instance Reversible_BearGame {G} : Reversible (BearGame G).
 Proof.
@@ -824,8 +916,22 @@ Proof.
         -- simpl.
            now rewrite <- Hv'1.
         -- simpl.
-           rewrite <- Hv'1; simpl.
-           apply cheat.
+           rewrite <- Hv'1; simpl; clear Hv'1.
+           rewrite remove_insert.
+           ++ rewrite insertion_sort_idem; [|apply insertion_sort_sorts].
+              rewrite insertion_sort_idem.
+              ** apply insert_remove; [apply s'|apply s'|auto].
+              ** apply remove_sorted; apply s'.
+           ++ rewrite insertion_sort_In.
+              rewrite In_remove_iff.
+              rewrite filter_In in Hv'2.
+              destruct Hv'2 as [_ Hv'].
+              unfold in_decb in Hv'.
+              destruct in_dec as [HIn|HnIn].
+              ** simpl in Hv'.
+                 unfold eqb in Hv'.
+                 destruct eq_dec; [tauto|discriminate].
+              ** simpl in HnIn; tauto.
   - intros.
     simpl.
     destruct (to_play (exec_move m)) eqn:m_play.
@@ -894,7 +1000,16 @@ Proof.
               ** simpl; auto.
               ** reflexivity.
               ** simpl.
-                 apply cheat.
+                 rewrite remove_insert.
+                 --- rewrite insertion_sort_idem; [|apply insertion_sort_sorts].
+                     rewrite insertion_sort_idem.
+                     +++ apply insert_remove; [apply s|apply s|apply h].
+                     +++ apply remove_sorted; apply s.
+                 --- rewrite insertion_sort_In.
+                     rewrite In_remove_iff.
+                     intros [pf1 pf2].
+                     apply pf1.
+                     now apply h_dest_not_diff_hunter.
            ++ rewrite filter_In.
               split.
               ** rewrite <- predecessors_correct.
