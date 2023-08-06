@@ -415,9 +415,9 @@ Proof.
   simpl; repeat split; discriminate.
 Defined.
 
-Require Import Games.Util.HMap.
+Require Import Games.Util.OMap.
 
-Definition TB_Sample : CorrectTablebase HM SampleGame :=
+Definition TB_Sample : CorrectTablebase OM SampleGame :=
   certified_TB.
 
 Definition tb_Sample := tb TB_Sample.

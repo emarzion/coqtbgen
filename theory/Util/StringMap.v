@@ -272,7 +272,8 @@ Proof.
            pose (show_inj _ _ e); congruence.
       * rewrite lookup_add_neq; auto.
         unfold str_lookup in l_in.
-        rewrite l_in; intuition.
+        rewrite l_in.
+        split; intro; [now right|].
         destruct H2; [congruence|auto].
 Qed.
 
