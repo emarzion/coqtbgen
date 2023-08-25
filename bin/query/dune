@@ -48,7 +48,8 @@
 
     ;; Ocaml code
     read_file
-  ))
+  )
+  (libraries yojson extracted_code))
 
 (env
   (dev

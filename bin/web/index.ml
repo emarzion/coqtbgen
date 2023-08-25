@@ -10,17 +10,11 @@ open ExtractQuery
 open Read_file
 open Draw
 
+open Extracted_code
+
 module Model = struct
 
   type t = coq_BG_State
-
-  let rotate x = RomanWheel.(
-    match x with
-    | Center -> SpokeVert(S1,L)
-    | SpokeVert(s,l) -> SpokeVert(clockwise s, l)
-    )
-
-  let flip x = { x with bear = Obj.magic (rotate (Obj.magic x.bear)) }
 
   let init = init_RW_State
 
@@ -32,7 +26,6 @@ type rp = rs * rf
 
 module Action = struct
   type t =
-    | ClickButton
     | ClickMove of coq_BG_Move
 end
 
@@ -43,7 +36,6 @@ module Controller = struct
     let curr = React.S.value rs in
     let m =
       match a with
-      | ClickButton -> Model.flip curr
       | ClickMove m -> exec_move RomanWheel.coq_RomanWheel curr m
     in
     rf m
@@ -77,26 +69,7 @@ module View = struct
       svg [Js_of_ocaml_tyxml.Tyxml_js.R.Svg.g pieces]
     )
 
-  let one_more_button (rs,rf) =
-    let onclick _ =
-      Controller.update ClickButton (rs,rf); true in
-    let curr = List.hd (ReactiveData.RList.value (ReactiveData.RList.from_signal (React.S.map (fun x -> [x]) rs))) in
-    let curr_bear = curr.BearGame.bear in
-    let str = RomanWheel.coq_Show_RWVert (Obj.magic curr_bear) in
-    Tyxml_js.Html.(button ~a:[a_onclick onclick] [txt ("Bear: " ^ str)])
-
-  let another_button (rs,rf) x =
-    let onclick _ =
-      Controller.update ClickButton (rs,rf); true in
-    let curr_bear = x.BearGame.bear in
-    let str = RomanWheel.coq_Show_RWVert (Obj.magic curr_bear) in
-    [Tyxml_js.Html.(button ~a:[a_onclick onclick] [txt ("Bear: " ^ str)])]
-
-  let mbutton (rs, rf) =
-    let sig_button = ReactiveData.RList.from_signal (React.S.map (another_button (rs,rf)) rs) in
-       [Js_of_ocaml_tyxml.Tyxml_js.R.Html.a sig_button]
-
-  let pure_move_links (rs,rf) x =
+  let pure_move_links mp (rs,rf) x =
     let moves = enum_moves RomanWheel.coq_RomanWheel x in
     let onclick m _ =
       Controller.update (ClickMove m) (rs, rf); true in
@@ -105,8 +78,11 @@ module View = struct
       let st = show_RW_State s' in
       print_endline st;
       let str =
-        (match query_tb st with
-         | Some str -> str
+        (match M.lookup st mp with
+         | Some (pl, n) -> (
+            match pl with
+            | TBGen.White -> "White" ^ string_of_int n
+            | TBGen.Black -> "Black" ^ string_of_int n)
          | None -> "Draw"
         ) in
       let text = print_RW_move x m ^ "==" ^ str ^ ";;" in
@@ -123,38 +99,34 @@ module View = struct
 </ul>
 *)
 
-  let links (rs, rf) =
-    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links (rs, rf)) rs) in
+  let links mp (rs, rf) =
+    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links mp (rs, rf)) rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
 
   let board (rs,rf) =
     Tyxml_js.Html.svg (circ :: lines @ arcs @ [pieces (rs,rf)])
 
-  let bar (rs,rf) =
-    Tyxml_js.Html.(div ~a:[a_class ["bar"]] (one_more_button (rs,rf) :: (mbutton (rs,rf)) @ [board (rs,rf); links (rs,rf)]))
+  let bar mp (rs,rf) =
+    Tyxml_js.Html.(div ~a:[a_class ["bar"]] [board (rs,rf); links mp (rs,rf)])
 
-
-  let draw_stuff rp node =
-    Dom.appendChild node (Tyxml_js.To_dom.of_node (bar rp));
+  let draw_stuff mp rp node =
+    Dom.appendChild node (Tyxml_js.To_dom.of_node (bar mp rp));
 
 end
    
-let start rp node =
-  View.draw_stuff rp node;
+let start mp rp node =
+  View.draw_stuff mp rp node;
   Lwt.return ()
    
-let main _ =
+let main mp _ =
   let doc = Dom_html.document in
-  let str =
-    match query_tb "(White,Center,[Spoke3M;Spoke4L;Spoke7R])" with
-    | None -> "none"
-    | Some str -> str in
-  print_endline str;
   let parent =
     Js.Opt.get (doc##getElementById(Js.string "beargame"))
       (fun () -> assert false)
     in
   let rp = React.S.create Model.init in
-    start rp parent
+    start mp rp parent
 
-let _ = Js_of_ocaml_lwt.Lwt_js_events.onload () >>= main
+let _ =
+  let mp = make_tb in
+  Js_of_ocaml_lwt.Lwt_js_events.onload () >>= (main mp)

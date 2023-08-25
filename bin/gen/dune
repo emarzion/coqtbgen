@@ -23,7 +23,7 @@
 (executable
   (name gen_file)
   (modules gen_file)
-  (libraries extracted_code))
+  (libraries extracted_code yojson))
 
 (rule
   (target tb.txt)

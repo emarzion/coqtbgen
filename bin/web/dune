@@ -3,7 +3,7 @@
   (modules draw index)
   (modes byte)
   (preprocess (pps js_of_ocaml-ppx))
-  (libraries query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+  (libraries extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
 
 (rule
  (targets index.js)
