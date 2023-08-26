@@ -51,14 +51,14 @@ module View = struct
   let pure_bear x =
     let pos = coords (Obj.magic (x.BearGame.bear)) in
     [Js_of_ocaml_tyxml.Tyxml_js.Svg.(
-      circle ~a:[a_stroke (`Color ("black", None)); a_fill (`Color ("black", None)); a_cx (fst pos, Some `Px); (a_cy (snd pos, Some `Px)); (a_r (5., Some `Px))] []
+      circle ~a:[a_stroke (`Color ("black", None)); a_fill (`Color ("black", None)); a_cx (fst pos, Some `Px); (a_cy (snd pos, Some `Px)); (a_r (7.5, Some `Px))] []
     )]
 
   let pure_hunters x =
     let hs = List.map (fun x -> coords (Obj.magic x)) x.BearGame.hunters in
     List.map (fun pos ->
       Js_of_ocaml_tyxml.Tyxml_js.Svg.(
-        circle ~a:[a_stroke (`Color ("black", None)); a_fill (`Color ("white", None)); a_cx (fst pos, Some `Px); (a_cy (snd pos, Some `Px)); (a_r (5., Some `Px))] []
+        circle ~a:[a_stroke (`Color ("black", None)); a_fill (`Color ("white", None)); a_cx (fst pos, Some `Px); (a_cy (snd pos, Some `Px)); (a_r (7.5, Some `Px))] []
       )) hs
 
   let pieces (rs,_) =
@@ -69,35 +69,51 @@ module View = struct
       svg [Js_of_ocaml_tyxml.Tyxml_js.R.Svg.g pieces]
     )
 
-  let pure_move_links mp (rs,rf) x =
-    let moves = enum_moves RomanWheel.coq_RomanWheel x in
+  let pure_curr_res mp s =
+    let st = show_RW_State s in
+    let text = (
+      match M.lookup st mp with
+      | Some (pl, n) -> (
+        match pl with
+        | TBGen.White -> "White wins in " ^ string_of_int n
+        | TBGen.Black -> "Black wins in " ^ string_of_int n
+        )
+      | None -> "Drawn"
+      ) in
+    [Tyxml_js.Html.(a ~a:[a_class ["currtext"]] [txt text])]
+
+  let curr_res mp (rs,_) =
+    let sig_curr = ReactiveData.RList.from_signal (React.S.map (pure_curr_res mp) rs) in
+    Js_of_ocaml_tyxml.Tyxml_js.R.Html.p sig_curr
+
+(*
+  let links mp (rs, rf) =
+    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links mp (rs, rf)) rs) in
+    Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
+*)
+
+  let pure_move_links mp (rs,rf) s =
+    let moves = enum_moves RomanWheel.coq_RomanWheel s in
     let onclick m _ =
       Controller.update (ClickMove m) (rs, rf); true in
     List.concat_map (fun m ->
-      let s' = coq_RW_exec_move x m in
+      let s' = coq_RW_exec_move s m in
       let st = show_RW_State s' in
       print_endline st;
-      let str =
-        (match M.lookup st mp with
-         | Some (pl, n) -> (
-            match pl with
-            | TBGen.White -> "White" ^ string_of_int n
-            | TBGen.Black -> "Black" ^ string_of_int n)
-         | None -> "Draw"
+      let str = (
+        match M.lookup st mp with
+        | Some (pl, n) -> (
+          match pl with
+          | TBGen.White -> "White wins in " ^ string_of_int n
+          | TBGen.Black -> "Black wins in " ^ string_of_int n
+          )
+        | None -> "Drawn"
         ) in
-      let text = print_RW_move x m ^ "==" ^ str ^ ";;" in
-      [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick (onclick m); a_class ["whitewin"]] [txt text]);
+      let text = print_RW_move s m ^ ": " ^ str in
+      [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick (onclick m); a_class ["whitewin"]; a_style "text-decoration: none"] [txt text]);
        Tyxml_js.Html.br ()
       ]
       ) moves
-
-(*
-<ul>
-  <li>Item 1</li>
-  <li>Item 2</li>
-  <li>Item 3</li>
-</ul>
-*)
 
   let links mp (rs, rf) =
     let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links mp (rs, rf)) rs) in
@@ -106,11 +122,11 @@ module View = struct
   let board (rs,rf) =
     Tyxml_js.Html.svg (circ :: lines @ arcs @ [pieces (rs,rf)])
 
-  let bar mp (rs,rf) =
-    Tyxml_js.Html.(div ~a:[a_class ["bar"]] [board (rs,rf); links mp (rs,rf)])
+  let tablebase mp (rs,rf) =
+    Tyxml_js.Html.(div ~a:[a_class ["tablebase"]] [curr_res mp (rs, rf); board (rs,rf); links mp (rs,rf)])
 
   let draw_stuff mp rp node =
-    Dom.appendChild node (Tyxml_js.To_dom.of_node (bar mp rp));
+    Dom.appendChild node (Tyxml_js.To_dom.of_node (tablebase mp rp));
 
 end
    
