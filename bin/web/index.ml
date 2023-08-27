@@ -86,22 +86,27 @@ module View = struct
     let sig_curr = ReactiveData.RList.from_signal (React.S.map (pure_curr_res mp) rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p sig_curr
 
-(*
-  let links mp (rs, rf) =
-    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links mp (rs, rf)) rs) in
-    Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
-*)
+  let conv o =
+    match o with
+    | Some (TBGen.White, n) -> Some (Player.White, n)
+    | Some (TBGen.Black, n) -> Some (Player.Black, n)
+    | None -> None
 
   let pure_move_links mp (rs,rf) s =
     let moves = enum_moves RomanWheel.coq_RomanWheel s in
-    let onclick m _ =
-      Controller.update (ClickMove m) (rs, rf); true in
-    List.concat_map (fun m ->
+    let move_tups = List.map (fun m ->
       let s' = coq_RW_exec_move s m in
       let st = show_RW_State s' in
-      print_endline st;
+      (m, M.lookup st mp)
+    ) moves in
+    let move_tups_sorted = List.sort (fun (_,o1) (_,o2) ->
+      if TB.p_leb s.to_play (conv o1) (conv o2) then 1 else -1
+      ) move_tups in
+    let onclick m _ =
+      Controller.update (ClickMove m) (rs, rf); true in
+    List.concat_map (fun (m,o) ->
       let str = (
-        match M.lookup st mp with
+        match o with
         | Some (pl, n) -> (
           match pl with
           | TBGen.White -> "White wins in " ^ string_of_int n
@@ -113,7 +118,7 @@ module View = struct
       [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick (onclick m); a_class ["whitewin"]; a_style "text-decoration: none"] [txt text]);
        Tyxml_js.Html.br ()
       ]
-      ) moves
+      ) move_tups_sorted
 
   let links mp (rs, rf) =
     let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links mp (rs, rf)) rs) in
