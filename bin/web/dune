@@ -30,3 +30,9 @@
   (deps index.raw.html)
   (action
     (run cp index.raw.html index.html)))
+
+(rule
+  (targets test.html)
+  (deps index.raw.html)
+  (action
+    (run cp index.raw.html test.html)))
