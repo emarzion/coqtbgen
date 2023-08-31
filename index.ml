@@ -1,5 +1,3 @@
-(* based on https://commons.wikimedia.org/wiki/File:Bear_game_05.svg *)
-
 open Lwt.Infix
 open Js_of_ocaml
 open Js_of_ocaml_tyxml
