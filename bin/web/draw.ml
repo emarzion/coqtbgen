@@ -1,14 +1,6 @@
-(*
-open Lwt.Infix
-open Js_of_ocaml
-open Js_of_ocaml_tyxml
-*)
+(* based on https://commons.wikimedia.org/wiki/File:Bear_game_05.svg *)
+
 open Query
-(*
-open BearGame
-open ExtractQuery
-open Read_file
-*)
 
 let coords x = RomanWheel.(
   match x with

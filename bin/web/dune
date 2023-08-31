@@ -1,9 +1,15 @@
+(library
+  (name draw)
+  (modules draw)
+  (libraries query js_of_ocaml-tyxml)
+  )
+
 (executable
   (name index)
-  (modules draw index)
+  (modules index)
   (modes byte)
   (preprocess (pps js_of_ocaml-ppx))
-  (libraries extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+  (libraries draw extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
 
 (rule
  (targets index.js)
@@ -11,6 +17,27 @@
   (run
    %{bin:js_of_ocaml}
    %{dep:index.bc}
+   -o
+   %{targets}
+   --enable effects
+   --opt=3
+   --source-map
+   --file
+   %{dep:../gen/tb.txt}:/static/tb.txt)))
+
+(executable
+  (name play)
+  (modules play)
+  (modes byte)
+  (preprocess (pps js_of_ocaml-ppx))
+  (libraries draw extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+
+(rule
+ (targets play.js)
+ (action
+  (run
+   %{bin:js_of_ocaml}
+   %{dep:play.bc}
    -o
    %{targets}
    --enable effects
@@ -32,7 +59,7 @@
     (run cp index.raw.html index.html)))
 
 (rule
-  (targets test.html)
-  (deps index.raw.html)
+  (targets play.html)
+  (deps play.raw.html)
   (action
-    (run cp index.raw.html test.html)))
+    (run cp play.raw.html play.html)))
