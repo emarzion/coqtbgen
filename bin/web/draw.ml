@@ -1,6 +1,6 @@
 (* based on https://commons.wikimedia.org/wiki/File:Bear_game_05.svg *)
 
-open Query
+open Extracted
 
 let coords x = RomanWheel.(
   match x with

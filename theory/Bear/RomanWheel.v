@@ -8,6 +8,8 @@ Require Import Games.Util.Show.
 Require Import Games.Bear.Graph.
 Require Import Games.Bear.BearGame.
 Require Import Games.Game.TB.
+Require Import Games.Game.OCamlTB.
+
 
 Inductive Spoke :=
   S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8.
@@ -155,8 +157,6 @@ Proof.
       * constructor.
 Qed.
 
-
-
 Lemma all_neq_not_In {X} (x : X) (xs : list X) :
   List.fold_right and True (List.map (fun y => x <> y) xs) ->
   ~ In x xs.
@@ -297,21 +297,15 @@ Global Instance Show_RWV : Show (Vert RomanWheel) :=
 
 Definition RW_TB := Bear_TB RomanWheel.
 
+Definition RW_TB_correct : CorrectTablebase
+  RW_TB :=
+  certified_TB_correct.
+
 Require Import Games.Util.OMap.
-
-Definition wps : OM (Player.Player * nat) :=
-  white_positions (tb RW_TB).
-
-Definition bps : OM (Player.Player * nat) :=
-  black_positions (tb RW_TB).
-
 Require Import Extraction.
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlNativeString.
 Extraction Language OCaml.
 
-Extraction "RW.ml" wps bps.
-
-
-
+Extraction "RW.ml" RW_TB.

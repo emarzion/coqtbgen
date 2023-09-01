@@ -1,55 +1,7 @@
-(coq.extraction
-  (prelude ExtractQuery)
-  (extracted_modules
-    Ascii
-    BearGame
-    Compare_dec
-    Datatypes
-    Dec
-    ExtractQuery
-    Game
-    Graph
-    List0
-    Player
-    RomanWheel
-    Show
-    Sort
-    Specif
-    String0
-    StringMap
-    TB
-  )
-  (theories Games))
-
 (library
   (name query)
-  (modules
-    ;; Patch code
-    TailRec
-
-    ;; Extracted code
-    Ascii
-    BearGame
-    Compare_dec
-    Datatypes
-    Dec
-    ExtractQuery
-    Game
-    Graph
-    List0
-    Player
-    RomanWheel
-    Show
-    Sort
-    Specif
-    String0
-    StringMap
-    TB
-
-    ;; Ocaml code
-    read_file
-  )
-  (libraries yojson extracted_code))
+  (modules read_file)
+  (libraries yojson extracted))
 
 (env
   (dev

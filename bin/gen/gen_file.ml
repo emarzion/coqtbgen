@@ -1,7 +1,9 @@
 open Yojson.Safe
 
-open Extracted_code
-open TBGen
+open Extracted
+open Player
+open OCamlTB
+open RomanWheel
 
 let print_player pl =
   match pl with
@@ -19,8 +21,14 @@ let tups_to_json tups =
   `Assoc (List.map tup_to_json tups)
 
 let () =
-  let oc = open_out "tb.txt" in
-  let tups = M.bindings wps @ M.bindings bps in
-  let json_tups = tups_to_json tups in
-  let () = to_channel oc json_tups in
+  let oc_w = open_out "tb_w.json" in
+  let oc_b = open_out "tb_b.json" in
+  let tups_w = M.bindings (coq_RW_TB.tb_whites) in
+  let tups_b = M.bindings (coq_RW_TB.tb_blacks) in
+  let json_tups_w = tups_to_json tups_w in
+  let json_tups_b = tups_to_json tups_b in
+  let () = to_channel oc_w json_tups_w in
+  let () = to_channel oc_b json_tups_b in
+  let () = close_out oc_w in
+  let () = close_out oc_b in
   ()

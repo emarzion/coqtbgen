@@ -1,18 +1,3 @@
-(coq.extraction
-  (prelude ExtractRomanWheel)
-  (extracted_modules TBGen)
-  (theories Games))
-
-(library
-  (name extracted_code)
-  (modules
-    ;; Patch code
-    M
-
-    ;; Extracted code
-    TBGen
-  ))
-
 (env
   (dev
     (flags (:standard -w -39 -w -33))
@@ -23,9 +8,9 @@
 (executable
   (name gen_file)
   (modules gen_file)
-  (libraries extracted_code yojson))
+  (libraries extracted yojson))
 
 (rule
-  (target tb.txt)
+  (targets tb_w.json tb_b.json)
   (deps gen_file.exe)
   (action (run ./gen_file.exe)))

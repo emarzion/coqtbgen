@@ -1,0 +1,63 @@
+(env
+  (dev
+    (flags (:standard -w -39 -w -33))
+    (ocamlopt_flags (:standard -O3)))
+  (release
+    (ocamlopt_flags (:standard -O3))))
+
+(coq.extraction
+  (prelude Extract)
+  (extracted_modules
+    Ascii
+    BearGame
+    Compare_dec
+    Datatypes
+    Dec
+    Extract
+    Game
+    Graph
+    List0
+    Nat
+    NewLoop
+    OCamlTB
+    OMap
+    Player
+    RomanWheel
+    Show
+    Sort
+    Specif
+    String0
+    StringMap
+    TB
+  )
+  (theories Games))
+
+(library
+  (name extracted)
+  (modules
+    ;; Patch code
+    M
+
+    ;; Extracted code
+    Ascii
+    BearGame
+    Compare_dec
+    Datatypes
+    Dec
+    Extract
+    Game
+    Graph
+    List0
+    Nat
+    NewLoop
+    OCamlTB
+    OMap
+    Player
+    RomanWheel
+    Show
+    Sort
+    Specif
+    String0
+    StringMap
+    TB
+  ))

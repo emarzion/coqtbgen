@@ -415,9 +415,10 @@ Proof.
   simpl; repeat split; discriminate.
 Defined.
 
-Require Import Games.Util.OMap.
+Require Import Games.Game.OCamlTB.
 
-Definition TB_Sample : CorrectTablebase OM SampleGame :=
+Definition TB_Sample : OCamlTablebase SampleGame :=
   certified_TB.
 
-Definition tb_Sample := tb TB_Sample.
+Definition TB_Sample_correct : CorrectTablebase TB_Sample :=
+  certified_TB_correct.

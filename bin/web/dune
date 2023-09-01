@@ -9,7 +9,7 @@
   (modules index)
   (modes byte)
   (preprocess (pps js_of_ocaml-ppx))
-  (libraries draw extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+  (libraries draw extracted query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
 
 (rule
  (targets index.js)
@@ -23,14 +23,16 @@
    --opt=3
    --source-map
    --file
-   %{dep:../gen/tb.txt}:/static/tb.txt)))
+   %{dep:../gen/tb_w.json}:/static/tb_w.json
+   --file
+   %{dep:../gen/tb_b.json}:/static/tb_b.json)))
 
 (executable
   (name play)
   (modules play)
   (modes byte)
   (preprocess (pps js_of_ocaml-ppx))
-  (libraries draw extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
+  (libraries draw extracted query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
 
 (rule
  (targets play.js)
@@ -44,7 +46,9 @@
    --opt=3
    --source-map
    --file
-   %{dep:../gen/tb.txt}:/static/tb.txt)))
+   %{dep:../gen/tb_w.json}:/static/tb_w.json
+   --file
+   %{dep:../gen/tb_b.json}:/static/tb_b.json)))
 
 (rule
   (targets style.css)
