@@ -10,6 +10,8 @@
     Game
     Graph
     List0
+    OCamlTB
+    OMap
     Player
     RomanWheel
     Show
@@ -25,7 +27,7 @@
   (name query)
   (modules
     ;; Patch code
-    TailRec
+    M
 
     ;; Extracted code
     Ascii
@@ -37,6 +39,8 @@
     Game
     Graph
     List0
+    OCamlTB
+    OMap
     Player
     RomanWheel
     Show

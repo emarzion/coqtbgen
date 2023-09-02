@@ -1057,8 +1057,8 @@ Proof.
 Defined.
 
 Require Import Games.Util.OMap.
+Require Import Games.Game.OCamlTB.
 
 Definition Bear_TB (G : Graph) `{sh : Show (Vert G)}
   `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh}
-  : CorrectTablebase OM
-  (BearGame G) := certified_TB.
+  : OCamlTablebase (BearGame G) := certified_TB.

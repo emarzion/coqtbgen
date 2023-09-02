@@ -26,6 +26,6 @@
   (libraries extracted_code yojson))
 
 (rule
-  (target tb.txt)
+  (targets tb_w.json tb_b.json)
   (deps gen_file.exe)
   (action (run ./gen_file.exe)))

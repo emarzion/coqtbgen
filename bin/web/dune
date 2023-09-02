@@ -23,7 +23,9 @@
    --opt=3
    --source-map
    --file
-   %{dep:../gen/tb.txt}:/static/tb.txt)))
+   %{dep:../gen/tb_w.json}:/static/tb_w.json
+   --file
+   %{dep:../gen/tb_b.json}:/static/tb_b.json)))
 
 (executable
   (name play)
@@ -44,7 +46,9 @@
    --opt=3
    --source-map
    --file
-   %{dep:../gen/tb.txt}:/static/tb.txt)))
+   %{dep:../gen/tb_w.json}:/static/tb_w.json
+   --file
+   %{dep:../gen/tb_b.json}:/static/tb_b.json)))
 
 (rule
   (targets style.css)

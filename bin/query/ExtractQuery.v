@@ -15,6 +15,7 @@ Require Import Games.Bear.Sort.
 Require Import Games.Bear.BearGame.
 Require Import Games.Bear.RomanWheel.
 Require Import Games.Game.TB.
+Require Import Games.Game.OCamlTB.
 
 Definition make_BG_State {G} (pl : Player.Player)
   (b h1 h2 h3 : Graph.Vert G) : option (BG_State G).
@@ -80,26 +81,6 @@ Defined.
 
 Extraction Blacklist String List.
 
-(*
-Extract Constant List.app =>
-  "TailRec.app".
-Extract Constant List.length =>
-  "TailRec.length".
-Extract Constant List.map =>
-  "TailRec.map".
-Extract Constant List.concat =>
-  "TailRec.concat".
-Extract Constant List.filter =>
-  "TailRec.filter".
-Extract Constant List.nodup =>
-  "TailRec.nodup".
-*)
-
-(*
-Extract Constant pf_map =>
-  "(fun xs f -> TailRec.map (fun x -> f x __) xs)".
-*)
-
 Definition RW_exec_move (s : BG_State RomanWheel)
  : BG_Move s -> BG_State RomanWheel :=
   exec_move.
@@ -108,6 +89,11 @@ Definition show_RW_State (s : BG_State RomanWheel)
   : string :=
   show s.
 
+Definition query_RW_TB :
+  OCamlTablebase (BearGame RomanWheel) ->
+  BG_State RomanWheel -> option (Player.Player * nat) :=
+  query_TB.
+
 Separate Extraction
   make_RW_State
   init_RW_State
@@ -115,4 +101,5 @@ Separate Extraction
   BearGame.enum_moves
   print_RW_move
   show_RW_State
+  query_RW_TB
   p_leb.
