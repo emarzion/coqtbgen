@@ -416,8 +416,7 @@ Proof.
 Defined.
 
 Require Import Games.Util.OMap.
+Require Import Games.Game.OCamlTB.
 
-Definition TB_Sample : CorrectTablebase OM SampleGame :=
+Definition TB_Sample : OCamlTablebase SampleGame :=
   certified_TB.
-
-Definition tb_Sample := tb TB_Sample.

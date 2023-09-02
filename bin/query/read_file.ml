@@ -13,7 +13,14 @@ let json_to_tups = function
   | _ -> failwith "Error converting json to tuples."
 
 let make_tb =
-  let inc = open_in "tb.txt" in
-  let js = from_channel inc in
-  let tups = json_to_tups js in
-  List.fold_left (fun m (str, pr) -> M.insert str pr m) M.empty tups
+  let inc_w = open_in "tb_w.json" in
+  let inc_b = open_in "tb_b.json" in
+  let js_w = from_channel inc_w in
+  let js_b = from_channel inc_b in
+  let tups_w = json_to_tups js_w in
+  let tups_b = json_to_tups js_b in
+  let m_w = List.fold_left (fun m (str, pr) -> M.insert str pr m) M.empty tups_w in
+  let m_b = List.fold_left (fun m (str, pr) -> M.insert str pr m) M.empty tups_b in
+  let () = close_in inc_w in
+  let () = close_in inc_b in
+  { tb_whites = m_w; tb_blacks = m_b }

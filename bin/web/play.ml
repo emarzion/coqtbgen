@@ -1,4 +1,3 @@
-
 open Lwt.Infix
 open Js_of_ocaml
 open Js_of_ocaml_tyxml
@@ -8,8 +7,6 @@ open BearGame
 open ExtractQuery
 open Read_file
 open Draw
-
-open Extracted_code
 
 module Model = struct
 
@@ -69,13 +66,12 @@ module View = struct
     )
 
   let pure_curr_res mp s =
-    let st = show_RW_State s in
     let text = (
-      match M.lookup st mp with
+      match ExtractQuery.query_RW_TB mp s with
       | Some (pl, n) -> (
         match pl with
-        | TBGen.White -> "White wins in " ^ string_of_int n
-        | TBGen.Black -> "Black wins in " ^ string_of_int n
+        | Player.White -> "White wins in " ^ string_of_int n
+        | Player.Black -> "Black wins in " ^ string_of_int n
         )
       | None -> "Drawn"
       ) in
@@ -85,21 +81,14 @@ module View = struct
     let sig_curr = ReactiveData.RList.from_signal (React.S.map (pure_curr_res mp) rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p sig_curr
 
-  let conv o =
-    match o with
-    | Some (TBGen.White, n) -> Some (Player.White, n)
-    | Some (TBGen.Black, n) -> Some (Player.Black, n)
-    | None -> None
-
   let pure_move_links mp (rs,rf) s =
     let moves = enum_moves RomanWheel.coq_RomanWheel s in
     let move_tups = List.map (fun m ->
       let s' = coq_RW_exec_move s m in
-      let st = show_RW_State s' in
-      (m, M.lookup st mp)
+      (m, ExtractQuery.query_RW_TB mp s')
     ) moves in
     let move_tups_sorted = List.sort (fun (_,o1) (_,o2) ->
-      if TB.p_leb s.to_play (conv o1) (conv o2) then 1 else -1
+      if OCamlTB.p_leb s.to_play o1 o2 then 1 else -1
       ) move_tups in
     let onclick m _ =
       Controller.update (ClickMove m) (rs, rf); true in
@@ -108,8 +97,8 @@ module View = struct
         match o with
         | Some (pl, n) -> (
           match pl with
-          | TBGen.White -> "White wins in " ^ string_of_int n
-          | TBGen.Black -> "Black wins in " ^ string_of_int n
+          | Player.White -> "White wins in " ^ string_of_int n
+          | Player.Black -> "Black wins in " ^ string_of_int n
           )
         | None -> "Drawn"
         ) in
@@ -149,4 +138,4 @@ let main mp _ =
 
 let _ =
   let mp = make_tb in
-  Js_of_ocaml_lwt.Lwt_js_events.onload () >>= (main mp)
+  Js_of_ocaml_lwt.Lwt_js_events.onload () >>= (main (Obj.magic mp))

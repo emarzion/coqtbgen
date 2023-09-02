@@ -296,22 +296,3 @@ Global Instance Show_RWV : Show (Vert RomanWheel) :=
   Show_RWVert.
 
 Definition RW_TB := Bear_TB RomanWheel.
-
-Require Import Games.Util.OMap.
-
-Definition wps : OM (Player.Player * nat) :=
-  white_positions (tb RW_TB).
-
-Definition bps : OM (Player.Player * nat) :=
-  black_positions (tb RW_TB).
-
-Require Import Extraction.
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlNatInt.
-Require Import ExtrOcamlNativeString.
-Extraction Language OCaml.
-
-Extraction "RW.ml" wps bps.
-
-
-
