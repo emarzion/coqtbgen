@@ -74,9 +74,9 @@ Definition print_RW_move {s : BG_State RomanWheel}
 Proof.
   destruct m.
   - destruct b.
-    exact ("Bear_" ++ show b_dest).
+    exact ("B" ++ show b_dest).
   - destruct h.
-    exact ("Hunter_" ++ show h_orig ++ "_" ++ show h_dest).
+    exact ("H" ++ show h_orig ++ show h_dest).
 Defined.
 
 Extraction Blacklist String List.

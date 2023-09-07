@@ -56,9 +56,9 @@ Inductive SpokeLoc :=
 
 Definition show_loc (l : SpokeLoc) : string := (
   match l with
-  | Mid => "M"
-  | L => "L"
-  | R => "R"
+  | Mid => "m"
+  | L => "l"
+  | R => "r"
   end)%string.
 
 Definition list_locs :=
@@ -68,22 +68,22 @@ Inductive RWVert :=
   | Center
   | SpokeVert (s : Spoke) (l : SpokeLoc).
 
-Lemma show_loc_inj : forall l l',
-  show_loc l = show_loc l' -> l = l'.
+Lemma show_spoke_inj : forall s s',
+  show_spoke s = show_spoke s' -> s = s'.
 Proof.
-  intros l l'.
-  destruct l, l'; simpl;
+  intros s s'.
+  destruct s, s'; simpl;
   (discriminate || reflexivity).
 Qed.
 
 Lemma spoke_loc : forall s s' l l',
-  show_spoke s ++ show_loc l =
-  show_spoke s' ++ show_loc l' ->
-  s = s' /\ l = l'.
+  show_loc l ++ show_spoke s =
+  show_loc l' ++ show_spoke s' ->
+  l = l' /\ s = s'.
 Proof.
   intros s s' l l' pf.
-  destruct s, s'; try inversion pf;
-  (split; [reflexivity|now apply show_loc_inj]).
+  destruct l, l'; try inversion pf;
+  (split; [reflexivity|now apply show_spoke_inj]).
 Qed.
 
 Global Instance Show_RWVert : Show RWVert.
@@ -91,26 +91,27 @@ Proof.
   unshelve econstructor.
   - intro v.
     destruct v eqn:?.
-    + exact "Center"%string.
-    + exact ("Spoke" ++ show_spoke s ++ show_loc l)%string.
+    + exact "c"%string.
+    + exact (show_loc l ++ show_spoke s)%string.
   - intros v v'.
     destruct v as [|s l];
     destruct v' as [|s' l'].
     + intro; reflexivity.
-    + intro pf; inversion pf.
-    + intro pf; inversion pf.
+    + intro pf; destruct l'; now inversion pf.
+    + intro pf; destruct l; now inversion pf.
     + cbv zeta match beta.
       intro pf.
-      cut (s = s' /\ l = l').
+      cut (l = l' /\ s = s').
       { intros []; congruence. }
-      apply spoke_loc.
-      eapply app_l_cancel; eauto.
+      now apply spoke_loc.
 Defined.
 
 Global Instance RWVert_Nonnil : Nonnil RWVert.
 Proof.
   constructor.
-  destruct x; simpl; discriminate.
+  destruct x; simpl.
+  - discriminate.
+  - destruct l; discriminate.
 Qed.
 
 Global Instance RWVert_CommaFree : CommaFree RWVert.
@@ -122,10 +123,8 @@ Proof.
     unfold Show_RWVert.
     repeat rewrite char_free_app.
     split.
-    + simpl; repeat split; discriminate.
-    + split.
-      * destruct s; simpl; repeat split; discriminate.
-      * destruct l; simpl; repeat split; discriminate.
+    + destruct l; simpl; repeat split; discriminate.
+    + destruct s; simpl; repeat split; discriminate.
 Qed.
 
 Global Instance RWVert_Semicolon : SemicolonFree RWVert.
@@ -137,10 +136,8 @@ Proof.
     unfold Show_RWVert.
     repeat rewrite char_free_app.
     split.
-    + simpl; repeat split; discriminate.
-    + split.
-      * destruct s; simpl; repeat split; discriminate.
-      * destruct l; simpl; repeat split; discriminate.
+    + destruct l; simpl; repeat split; discriminate.
+    + destruct s; simpl; repeat split; discriminate.
 Qed.
 
 Lemma NoDup_list_locs : NoDup list_locs.
@@ -154,8 +151,6 @@ Proof.
       * tauto.
       * constructor.
 Qed.
-
-
 
 Lemma all_neq_not_In {X} (x : X) (xs : list X) :
   List.fold_right and True (List.map (fun y => x <> y) xs) ->
