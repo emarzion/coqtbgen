@@ -94,6 +94,12 @@ Definition query_RW_TB :
   BG_State RomanWheel -> option (Player.Player * nat) :=
   query_TB.
 
+Definition rw_tb_strat (pl : Player.Player)
+  (s : Game.GameState (BearGame RomanWheel))
+  (tb : OCamlTablebase (BearGame RomanWheel))
+ : Strategy.strategy pl s :=
+  tb_strat s pl tb.
+
 Separate Extraction
   make_RW_State
   init_RW_State
@@ -102,4 +108,5 @@ Separate Extraction
   print_RW_move
   show_RW_State
   query_RW_TB
-  p_leb.
+  p_leb
+  rw_tb_strat.
