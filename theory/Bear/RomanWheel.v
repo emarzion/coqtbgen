@@ -56,9 +56,9 @@ Inductive SpokeLoc :=
 
 Definition show_loc (l : SpokeLoc) : string := (
   match l with
-  | Mid => "m"
-  | L => "l"
-  | R => "r"
+  | Mid => "M"
+  | L => "L"
+  | R => "R"
   end)%string.
 
 Definition list_locs :=
@@ -91,7 +91,7 @@ Proof.
   unshelve econstructor.
   - intro v.
     destruct v eqn:?.
-    + exact "c"%string.
+    + exact "C"%string.
     + exact (show_loc l ++ show_spoke s)%string.
   - intros v v'.
     destruct v as [|s l];
