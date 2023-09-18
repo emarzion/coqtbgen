@@ -17,6 +17,37 @@ svg {
   font-family: sans-serif;
 }
 
+.blackwin {
+  color: white;
+  background-color: black;
+  font-family: sans-serif;
+}
+
+.draw {
+  color: black;
+  background-color: gray;
+  font-family: sans-serif;
+}
+
+.selected {
+  color: white;
+  background-color: black;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+.deselected {
+  color: black;
+  background-color: white;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+.normal {
+  color:  black;
+  font-family:  sans-serif;
+}
+
 .currtext {
   color: black;
   font-family: sans-serif;

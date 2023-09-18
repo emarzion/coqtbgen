@@ -14,11 +14,13 @@ module Model = struct
   type t = 
     { curr_state : coq_BG_State;
       curr_tb_strategy : strategy;
+      tb_player : Player.coq_Player;
     }
 
   let init tb =
     { curr_state = init_RW_State;
-      curr_tb_strategy = rw_tb_strat Player.White (Obj.magic init_RW_State) tb;
+      curr_tb_strategy = rw_tb_strat Player.Black (Obj.magic init_RW_State) tb;
+      tb_player = Player.Black;
     }
 
 end
@@ -31,13 +33,15 @@ module Action = struct
   type t =
     | ClickMove of coq_BG_Move
     | ClickStep
+    | ClickBlack
+    | ClickWhite
 end
 
 module Controller = struct
   open Action
 
-  let update (a : Action.t) ((rs,rf) : rp) =
-    let Model.{ curr_state; curr_tb_strategy }  = React.S.value rs in
+  let update (a : Action.t) ((rs,rf) : rp) tb =
+    let Model.{ curr_state; curr_tb_strategy; tb_player }  = React.S.value rs in
     let t =
       match a with
       | ClickMove m ->
@@ -45,7 +49,7 @@ module Controller = struct
           match strat with
           | Coq_abelard_strategy(_,strats) ->
             let s = exec_move RomanWheel.coq_RomanWheel curr_state m in
-            let str' = strats (Obj.magic m) in Model.{ curr_state = s; curr_tb_strategy = str' }
+            let str' = strats (Obj.magic m) in Model.{ curr_state = s; curr_tb_strategy = str'; tb_player = tb_player }
           | _ -> failwith "mismatch."
           )
       | ClickStep ->
@@ -53,9 +57,19 @@ module Controller = struct
           match strat with
           | Coq_eloise_strategy(_,m,str) ->
             let s = exec_move RomanWheel.coq_RomanWheel curr_state (Obj.magic m) in
-            Model.{ curr_state = s; curr_tb_strategy = str }
+            Model.{ curr_state = s; curr_tb_strategy = str; tb_player = tb_player }
           | _ -> failwith "mismatch."
-        )
+          )
+      | ClickBlack -> Model.
+          { curr_state = curr_state;
+            curr_tb_strategy = rw_tb_strat Player.White (Obj.magic curr_state) tb;
+            tb_player = White
+          }
+      | ClickWhite -> Model.
+          { curr_state = curr_state;
+            curr_tb_strategy = rw_tb_strat Player.Black (Obj.magic curr_state) tb;
+            tb_player = Black
+          }
     in
     rf t
 end
@@ -90,58 +104,81 @@ module View = struct
       svg [Js_of_ocaml_tyxml.Tyxml_js.R.Svg.g pieces]
     )
 
-  let pure_curr_res mp x =
+  let pure_curr_res x =
     let Model.{ curr_state; _ } = x in
     let text = (
-      match ExtractQuery.query_RW_TB mp curr_state with
-      | Some (pl, n) -> (
-        match pl with
-        | Player.White -> "White wins in " ^ string_of_int n
-        | Player.Black -> "Black wins in " ^ string_of_int n
+      match BearGame.atomic_res RomanWheel.coq_RomanWheel curr_state with
+      | Some res -> (
+        match res with
+        | Game.Win pl -> Player.show_player pl ^ " wins!"
+        | Game.Draw -> "Drawn."
         )
-      | None -> "Drawn"
+      | None -> " "
       ) in
     [Tyxml_js.Html.(a ~a:[a_class ["currtext"]] [txt text])]
 
-  let curr_res mp (rs,_) =
-    let sig_curr = ReactiveData.RList.from_signal (React.S.map (pure_curr_res mp) rs) in
+  let curr_res (rs,_) =
+    let sig_curr = ReactiveData.RList.from_signal (React.S.map pure_curr_res rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p sig_curr
 
-  let pure_move_links (rs,rf) x =
-    let Model.{ curr_state; curr_tb_strategy } = x in
+  let pure_move_links (rs,rf) tb x =
+    let Model.{ curr_state; curr_tb_strategy; _ } = x in
     let moves = enum_moves RomanWheel.coq_RomanWheel curr_state in
     let clickmove m _ =
-      Controller.update (ClickMove m) (rs, rf); true in
+      Controller.update (ClickMove m) (rs, rf) tb; true in
     let clickstep _ =
-      Controller.update ClickStep (rs, rf); true in
+      Controller.update ClickStep (rs, rf) tb; true in
     let strat = Lazy.force curr_tb_strategy in
     match strat with
-    | Coq_eloise_strategy(_,_,_) -> [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick clickstep; a_class ["whitewin"]; a_style "text-decoration: none"] [txt "step"])]
+    | Coq_eloise_strategy(_,_,_) -> [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick clickstep; a_class ["whitewin"]] [txt "step"])]
     | _ ->
       List.concat_map (fun m ->
         let text = print_RW_move curr_state m in
-        [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick (clickmove m); a_class ["whitewin"]; a_style "text-decoration: none"] [txt text]);
+        [Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick (clickmove m); a_class ["whitewin"]] [txt text]);
         Tyxml_js.Html.br ()
         ]
         ) moves
 
-  let links (rs, rf) =
-    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links (rs, rf)) rs) in
+  let links (rs, rf) tb =
+    let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links (rs, rf) tb) rs) in
+    Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
+
+  let pure_player_toggles (rs,rf) tb x =
+    let pl = Model.(x.tb_player) in
+    let clickblack _ =
+      Controller.update ClickBlack (rs, rf) tb; true in
+    let clickwhite _ =
+      Controller.update ClickWhite (rs, rf) tb; true in
+    let deselected = Tyxml_js.Html.a_class ["deselected"] in
+    let selected = Tyxml_js.Html.a_class ["selected"] in
+    let (style_w, style_b) =
+      match pl with
+      | Player.White -> (deselected, selected)
+      | Player.Black -> (selected, deselected) in
+    let black = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick clickblack; style_b] [txt "black"]) in
+    let white = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick clickwhite; style_w] [txt "white"]) in
+    let space = Tyxml_js.Html.(a ~a:[] [txt " "]) in
+    let normal_style = Tyxml_js.Html.a_class ["normal"] in
+    let select_text = Tyxml_js.Html.(a ~a:[normal_style] [txt "Play as: "]) in
+    [select_text; black; space; white]
+
+  let player_toggles (rs, rf) tb =
+    let vals = ReactiveData.RList.from_signal (React.S.map (pure_player_toggles (rs, rf) tb) rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
 
   let board (rs,rf) =
     Tyxml_js.Html.svg (circ :: lines @ arcs @ [pieces (rs,rf)])
 
-  let tablebase mp (rs,rf) =
-    Tyxml_js.Html.(div ~a:[a_class ["tablebase"]] [curr_res mp (rs, rf); board (rs,rf); links (rs,rf)])
+  let tablebase (rs,rf) tb =
+    Tyxml_js.Html.(div ~a:[a_class ["tablebase"]] [player_toggles (rs, rf) tb; board (rs,rf); links (rs,rf) tb; curr_res (rs, rf)])
 
-  let draw_stuff mp rp node =
-    Dom.appendChild node (Tyxml_js.To_dom.of_node (tablebase mp rp));
+  let draw_stuff tb rp node =
+    Dom.appendChild node (Tyxml_js.To_dom.of_node (tablebase rp tb));
 
 end
-   
-let start mp rp node =
-  View.draw_stuff mp rp node;
+
+let start tb rp node =
+  View.draw_stuff tb rp node;
   Lwt.return ()
    
 let main mp _ =
