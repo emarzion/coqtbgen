@@ -109,4 +109,8 @@ Separate Extraction
   show_RW_State
   query_RW_TB
   p_leb
-  rw_tb_strat.
+  rw_tb_strat
+  create_Move
+  is_hunter
+  is_bear
+  .
