@@ -68,22 +68,22 @@ Inductive RWVert :=
   | Center
   | SpokeVert (s : Spoke) (l : SpokeLoc).
 
-Lemma show_spoke_inj : forall s s',
-  show_spoke s = show_spoke s' -> s = s'.
+Lemma show_loc_inj : forall l l',
+  show_loc l = show_loc l' -> l = l'.
 Proof.
-  intros s s'.
-  destruct s, s'; simpl;
+  intros l l'.
+  destruct l, l'; simpl;
   (discriminate || reflexivity).
 Qed.
 
 Lemma spoke_loc : forall s s' l l',
-  show_loc l ++ show_spoke s =
-  show_loc l' ++ show_spoke s' ->
-  l = l' /\ s = s'.
+  show_spoke s ++ show_loc l =
+  show_spoke s' ++ show_loc l' ->
+  s = s' /\ l = l'.
 Proof.
   intros s s' l l' pf.
-  destruct l, l'; try inversion pf;
-  (split; [reflexivity|now apply show_spoke_inj]).
+  destruct s, s'; try inversion pf;
+  (split; [reflexivity|now apply show_loc_inj]).
 Qed.
 
 Global Instance Show_RWVert : Show RWVert.
@@ -92,16 +92,16 @@ Proof.
   - intro v.
     destruct v eqn:?.
     + exact "C"%string.
-    + exact (show_loc l ++ show_spoke s)%string.
+    + exact (show_spoke s ++ show_loc l)%string.
   - intros v v'.
     destruct v as [|s l];
     destruct v' as [|s' l'].
     + intro; reflexivity.
-    + intro pf; destruct l'; now inversion pf.
-    + intro pf; destruct l; now inversion pf.
+    + intro pf; destruct s'; now inversion pf.
+    + intro pf; destruct s; now inversion pf.
     + cbv zeta match beta.
       intro pf.
-      cut (l = l' /\ s = s').
+      cut (s = s' /\ l = l').
       { intros []; congruence. }
       now apply spoke_loc.
 Defined.
@@ -111,7 +111,7 @@ Proof.
   constructor.
   destruct x; simpl.
   - discriminate.
-  - destruct l; discriminate.
+  - destruct s; discriminate.
 Qed.
 
 Global Instance RWVert_CommaFree : CommaFree RWVert.
@@ -123,8 +123,8 @@ Proof.
     unfold Show_RWVert.
     repeat rewrite char_free_app.
     split.
-    + destruct l; simpl; repeat split; discriminate.
     + destruct s; simpl; repeat split; discriminate.
+    + destruct l; simpl; repeat split; discriminate.
 Qed.
 
 Global Instance RWVert_Semicolon : SemicolonFree RWVert.
@@ -136,8 +136,8 @@ Proof.
     unfold Show_RWVert.
     repeat rewrite char_free_app.
     split.
-    + destruct l; simpl; repeat split; discriminate.
     + destruct s; simpl; repeat split; discriminate.
+    + destruct l; simpl; repeat split; discriminate.
 Qed.
 
 Lemma NoDup_list_locs : NoDup list_locs.

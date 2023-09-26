@@ -87,6 +87,50 @@ Inductive BG_Move {G} (s : BG_State G) : Type :=
   | BearMove : to_play s = Black -> BearMv s -> BG_Move s
   | HunterMove : to_play s = White -> HunterMv s -> BG_Move s.
 
+Definition create_Move {G} (s : BG_State G) (v v' : Vert G) : option (BG_Move s).
+Proof.
+  destruct (to_play s) eqn:s_play.
+  - destruct (in_dec v (hunters s)); [|exact None].
+    destruct (in_dec v' (successors v)); [|exact None].
+    destruct (eq_dec v' (bear s)); [exact None|].
+    destruct (in_dec v' (hunters s)).
+    + destruct (eq_dec v' v); [|exact None].
+      apply Some; apply HunterMove; auto.
+      econstructor.
+      * exact i.
+      * exact i0.
+      * exact n.
+      * intro; exact e.
+    + apply Some; apply HunterMove; auto.
+      econstructor.
+      * exact i.
+      * exact i0.
+      * exact n.
+      * intro; contradiction.
+  - destruct (eq_dec v (bear s)); [|exact None].
+    destruct (in_dec v' (successors v)); [|exact None].
+    destruct (in_dec v' (hunters s)); [exact None|].
+    apply Some; apply BearMove; auto.
+    econstructor.
+    + destruct e.
+      exact i.
+    + exact n.
+Defined.
+
+Definition is_hunter {G} (s : BG_State G)
+  (v : Vert G) : bool :=
+  match in_dec v (hunters s) with
+  | left _ => true
+  | right _ => false
+  end.
+
+Definition is_bear {G} (s : BG_State G)
+  (v : Vert G) : bool :=
+  match eq_dec v (bear s) with
+  | left _ => true
+  | right _ => false
+  end.
+
 Lemma no_remove_id {X} `{Discrete X}
   (x : X) (xs : list X) :
   ~ In x xs -> remove x xs = xs.
