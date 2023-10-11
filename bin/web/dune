@@ -1,3 +1,10 @@
+(env
+  (dev
+    (flags (:standard -w -37 -w -69))
+    (ocamlopt_flags (:standard -O3)))
+  (release
+    (ocamlopt_flags (:standard -O3))))
+
 (library
   (name draw)
   (modules draw)
