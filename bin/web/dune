@@ -34,29 +34,6 @@
    --file
    %{dep:../gen/tb_b.json}:/static/tb_b.json)))
 
-(executable
-  (name play)
-  (modules play)
-  (modes byte)
-  (preprocess (pps js_of_ocaml-ppx))
-  (libraries draw extracted_code query js_of_ocaml js_of_ocaml-lwt js_of_ocaml-tyxml))
-
-(rule
- (targets play.js)
- (action
-  (run
-   %{bin:js_of_ocaml}
-   %{dep:play.bc}
-   -o
-   %{targets}
-   --enable effects
-   --opt=3
-   --source-map
-   --file
-   %{dep:../gen/tb_w.json}:/static/tb_w.json
-   --file
-   %{dep:../gen/tb_b.json}:/static/tb_b.json)))
-
 (rule
   (targets style.css)
   (deps style.raw.css)
@@ -68,9 +45,3 @@
   (deps index.raw.html)
   (action
     (run cp index.raw.html index.html)))
-
-(rule
-  (targets play.html)
-  (deps play.raw.html)
-  (action
-    (run cp play.raw.html play.html)))
