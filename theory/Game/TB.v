@@ -303,21 +303,18 @@ Definition TB_loop_data : loop_data TB := {|
 Definition TB_final : TB :=
   loop TB_loop_data TB_init.
 
-Definition satMate pl (s : GameState G) (n : nat) : Type :=
-  { w : win pl s & depth w = n /\ minimal w }.
-
 Record TB_valid (tb : TB) : Type := {
 
   white_good : good (white_positions tb);
   black_good : good (black_positions tb);
 
-  satMate_tb : forall {s pl n},
-    n < curr tb -> satMate pl s n ->
+  mate_tb : forall {s pl n},
+    n < curr tb -> mate pl s n ->
     tb_lookup tb s = Some (pl, n);
 
-  tb_satMate : forall {s pl n},
+  tb_mate : forall {s pl n},
     tb_lookup tb s = Some (pl, n) ->
-    satMate pl s n;
+    mate pl s n;
 
   tb_small : forall {s pl n},
     tb_lookup tb s = Some (pl, n) ->
@@ -335,23 +332,23 @@ Record TB_valid (tb : TB) : Type := {
     tb_lookup tb s = None ->
     curr tb <= depth w;
 
-  satMate_lwp : forall {s pl},
+  mate_lwp : forall {s pl},
     to_play s = White ->
-    satMate pl s (curr tb) ->
+    mate pl s (curr tb) ->
     In s (last_white_positions tb);
 
-  lwp_satMate : forall {s},
+  lwp_mate : forall {s},
     In s (last_white_positions tb) ->
-    satMate (step_player (last_step tb) White) s (curr tb);
+    mate (step_player (last_step tb) White) s (curr tb);
 
-  satMate_lbp : forall {s pl},
+  mate_lbp : forall {s pl},
     to_play s = Black ->
-    satMate pl s (curr tb) ->
+    mate pl s (curr tb) ->
     In s (last_black_positions tb);
 
-  lbp_satMate : forall {s},
+  lbp_mate : forall {s},
     In s (last_black_positions tb) ->
-    satMate (step_player (last_step tb) Black) s (curr tb);
+    mate (step_player (last_step tb) Black) s (curr tb);
 
   lwp_NoDup : NoDup (last_white_positions tb);
 
@@ -365,36 +362,31 @@ Record TB_valid (tb : TB) : Type := {
 
   lbp_black : forall s, In s (last_black_positions tb) -> to_play s = Black;
 
-(*
-  sizes_never_exceed :
-    size (white_positions tb) +
-    size (black_positions tb) +
-    length (last_white_positions tb) +
-    length (last_black_positions tb) <= length enum_states;
-*)
   }.
 
-Lemma step_player_white (tb : TB) (v : TB_valid tb) : forall {s pl},
+Lemma step_player_white (tb : TB) (v : TB_valid tb) :
+  forall {s : GameState G} {pl},
   to_play s = White ->
-  satMate pl s (curr tb) ->
+  mate pl s (curr tb) ->
   pl = step_player (last_step tb) White.
 Proof.
   intros s pl s_play sm.
-  pose proof (satMate_lwp _ v s_play sm) as HIn.
-  pose (lwp_satMate _ v HIn) as sm'.
+  pose proof (mate_lwp _ v s_play sm) as HIn.
+  pose (lwp_mate _ v HIn) as sm'.
   destruct sm as [w _].
   destruct sm' as [w' _].
   exact (unique_winner _ _ _ w w').
 Qed.
 
-Lemma step_player_black (tb : TB) (v : TB_valid tb) : forall {s pl},
+Lemma step_player_black (tb : TB) (v : TB_valid tb) :
+  forall {s : GameState G} {pl},
   to_play s = Black ->
-  satMate pl s (curr tb) ->
+  mate pl s (curr tb) ->
   pl = step_player (last_step tb) Black.
 Proof.
   intros s pl s_play sm.
-  pose proof (satMate_lbp _ v s_play sm) as HIn.
-  pose (lbp_satMate _ v HIn) as sm'.
+  pose proof (mate_lbp _ v s_play sm) as HIn.
+  pose (lbp_mate _ v HIn) as sm'.
   destruct sm as [w _].
   destruct sm' as [w' _].
   exact (unique_winner _ _ _ w w').
@@ -545,9 +537,10 @@ Proof.
     congruence.
 Qed.
 
-Lemma satMate_S_lemma (tb : TB) (v : TB_valid tb) : forall {s pl},
-  satMate pl s (S (curr tb)) ->
-  { m : Move s & satMate pl (exec_move s m) (curr tb) }.
+Lemma mate_S_lemma (tb : TB) (v : TB_valid tb) :
+  forall {s : GameState G} {pl},
+  mate pl s (S (curr tb)) ->
+  { m : Move s & mate pl (exec_move s m) (curr tb) }.
 Proof.
   intros s pl [w [w_d w_m]].
   destruct w.
@@ -584,7 +577,7 @@ Proof.
           exact (tb_small _ v tb_sm).
           do 2 f_equal.
           apply (unique_winner _ _ (exec_move b m)).
-          * now destruct (tb_satMate _ v tb_sm).
+          * now destruct (tb_mate _ v tb_sm).
           * apply w.
         + exfalso.
           eapply (not_None_in_Somes).
@@ -597,7 +590,7 @@ Proof.
       assert (forall m, {w : win pl (exec_move b m) & depth w < curr tb}) as ws.
       { intro m.
         destruct (X m) as [k [Hk_small tb_sm]].
-        destruct (tb_satMate _ v tb_sm) as [w' ?].
+        destruct (tb_mate _ v tb_sm) as [w' ?].
         exists w'; lia.
       }
       pose (w' := abelard_win e e0 (fun m => projT1 (ws m))).
@@ -619,10 +612,9 @@ Proof.
       pose (w_m w'); lia.
 Defined.
 
-
-Lemma satMate_eq {s} {pl pl'} {n n'} :
-  satMate pl s n ->
-  satMate pl' s n' ->
+Lemma mate_eq {s : GameState G} {pl pl'} {n n'} :
+  mate pl s n ->
+  mate pl' s n' ->
   n = n'.
 Proof.
   intros sm sm'.
@@ -686,11 +678,11 @@ Proof.
       rewrite in_map_iff in HIn.
       destruct HIn as [s' [Hs' ?]].
       inversion Hs'; congruence.
-  (* satMate_tb *)
+  (* mate_tb *)
   - simpl; intros s pl n n_small sm.
     destruct (le_lt_eq_dec _ _ n_small) as [pf|pf].
     + pose proof (Arith_prebase.lt_S_n _ _ pf) as pf'.
-      pose proof (satMate_tb _ v pf' sm) as Htb.
+      pose proof (mate_tb _ v pf' sm) as Htb.
       unfold tb_lookup in *.
       destruct (to_play s) eqn:s_play.
       * simpl.
@@ -720,7 +712,7 @@ Proof.
         exists s.
         rewrite pf' in sm.
         pose proof (step_player_white _ v s_play sm) as Hpl.
-        pose (satMate_lwp _ v s_play sm) as Hpl'.
+        pose (mate_lwp _ v s_play sm) as Hpl'.
         split; auto.
         now rewrite Hpl.
       * simpl.
@@ -731,10 +723,10 @@ Proof.
         exists s.
         rewrite pf' in sm.
         pose proof (step_player_black _ v s_play sm) as Hpl.
-        pose (satMate_lbp _ v s_play sm) as Hpl'.
+        pose (mate_lbp _ v s_play sm) as Hpl'.
         split; auto.
         now rewrite Hpl.
-  (* tb_satMate *)
+  (* tb_mate *)
   - unfold tb_lookup.
     intros s pl n Htb.
     destruct (to_play s) eqn:s_play.
@@ -743,10 +735,10 @@ Proof.
       destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
         unfold tag in Hs'1.
-        epose (lwp_satMate _ v Hs'2).
+        epose (lwp_mate _ v Hs'2).
         inversion Hs'1.
         subst; auto.
-      * apply (tb_satMate _ v).
+      * apply (tb_mate _ v).
         unfold tb_lookup.
         now rewrite s_play.
     + simpl in Htb.
@@ -754,10 +746,10 @@ Proof.
       destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
         unfold tag in Hs'1.
-        epose (lbp_satMate _ v Hs'2).
+        epose (lbp_mate _ v Hs'2).
         inversion Hs'1.
         subst; auto.
-      * apply (tb_satMate _ v).
+      * apply (tb_mate _ v).
         unfold tb_lookup.
         now rewrite s_play.
   (* tb_small *)
@@ -807,13 +799,13 @@ Proof.
       rewrite s_play in Hs.
       specialize (Hs tb'_s).
       destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
-      cut (satMate pl s (curr tb)).
+      cut (mate pl s (curr tb)).
       { intro sm.
         elim s_lwp.
         rewrite map_map.
         unfold tag; simpl.
         rewrite map_id.
-        apply (satMate_lwp _ v s_play sm).
+        apply (mate_lwp _ v s_play sm).
       }
       exists w; split; auto.
       intro w'.
@@ -826,20 +818,20 @@ Proof.
       rewrite s_play in Hs.
       specialize (Hs tb'_s).
       destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
-      cut (satMate pl s (curr tb)).
+      cut (mate pl s (curr tb)).
       { intro sm.
         elim s_lbp.
         rewrite map_map.
         unfold tag; simpl.
         rewrite map_id.
-        apply (satMate_lbp _ v s_play sm).
+        apply (mate_lbp _ v s_play sm).
       }
       exists w; split; auto.
       intro w'.
       rewrite e.
       apply (tb_None _ v w').
       unfold tb_lookup; now rewrite s_play.
-  (* satMate_lwp *)
+  (* mate_lwp *)
   - intros s pl s_play sm; simpl in *.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step.
@@ -853,29 +845,29 @@ Proof.
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1; subst.
-              pose (lwp_satMate _ v Hs'2).
-              pose (satMate_eq sm s0); lia.
+              pose (lwp_mate _ v Hs'2).
+              pose (mate_eq sm m); lia.
            ++ epose (tb_small _ v).
               unfold tb_lookup in l.
               rewrite s_play in l.
               specialize (l pf).
-              epose (tb_satMate _ v).
-              unfold tb_lookup in s0.
-              rewrite s_play in s0.
-              specialize (s0 pf).
-              pose (satMate_eq sm s0); lia.
+              epose (tb_mate _ v).
+              unfold tb_lookup in m.
+              rewrite s_play in m.
+              specialize (m pf).
+              pose (mate_eq sm m); lia.
         -- rewrite in_concat.
-           destruct (satMate_S_lemma _ v sm) as [m smm].
+           destruct (mate_S_lemma _ v sm) as [m smm].
            exists (enum_preds (exec_move s m)).
            split.
            ++ apply in_map.
-              eapply (satMate_lbp _ v).
+              eapply (mate_lbp _ v).
               rewrite to_play_exec_move, s_play; reflexivity.
               exact smm.
            ++ apply enum_preds_correct2.
       * rewrite forallb_forall.
         intros m _.
-        destruct (satMate_S_lemma _ v sm) as [m' smm'].
+        destruct (mate_S_lemma _ v sm) as [m' smm'].
         assert (to_play (exec_move s m') = Black) as sm'_play
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_black _ v sm'_play smm') as Hpl.
@@ -896,11 +888,11 @@ Proof.
                    pose proof (enum_all m) as HIn.
                    rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
                  }
-                 epose (@tb_satMate _ v (exec_move s m)).
-                 unfold tb_lookup in s0.
-                 rewrite to_play_exec_move in s0.
-                 rewrite s_play in s0; simpl in s0.
-                 destruct (s0 _ _ pf); eauto.
+                 epose (@tb_mate _ v (exec_move s m)).
+                 unfold tb_lookup in m0.
+                 rewrite to_play_exec_move in m0.
+                 rewrite s_play in m0; simpl in m0.
+                 destruct (m0 _ _ pf); eauto.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
            destruct (str_lookup_adds_None_invert tb_sm).
@@ -920,7 +912,7 @@ Proof.
              exists m; split; auto.
              apply enum_all.
            }
-           assert (satMate Black (exec_move b m) (curr tb)).
+           assert (mate Black (exec_move b m) (curr tb)).
            { exists (w m).
              split; [lia|].
              intro w'.
@@ -936,7 +928,7 @@ Proof.
            simpl; split; [reflexivity|].
            rewrite in_map_iff.
            exists (exec_move b m); split; [reflexivity|].
-           eapply (satMate_lbp _ v).
+           eapply (mate_lbp _ v).
            rewrite to_play_exec_move, s_play; reflexivity.
            exact X.
     + unfold eloise_step.
@@ -948,27 +940,27 @@ Proof.
         -- rewrite in_map_iff in pf.
            destruct pf as [s' [Hs'1 Hs'2]].
            inversion Hs'1; subst.
-           pose (lwp_satMate _ v Hs'2).
-           pose (satMate_eq sm s0); lia.
+           pose (lwp_mate _ v Hs'2).
+           pose (mate_eq sm m); lia.
         -- epose (tb_small _ v).
            unfold tb_lookup in l.
            rewrite s_play in l.
            specialize (l pf).
-           epose (tb_satMate _ v).
-           unfold tb_lookup in s0.
-           rewrite s_play in s0.
-           specialize (s0 pf).
-           pose (satMate_eq sm s0); lia.
+           epose (tb_mate _ v).
+           unfold tb_lookup in m.
+           rewrite s_play in m.
+           specialize (m pf).
+           pose (mate_eq sm m); lia.
       * rewrite in_concat.
-        destruct (satMate_S_lemma _ v sm) as [m smm].
+        destruct (mate_S_lemma _ v sm) as [m smm].
         exists (enum_preds (exec_move s m)).
         split.
         -- apply in_map.
-           eapply (satMate_lbp _ v).
+           eapply (mate_lbp _ v).
            rewrite to_play_exec_move, s_play; reflexivity.
            exact smm.
         -- apply enum_preds_correct2.
-  (* lwp_satMate *)
+  (* lwp_mate *)
   - intros s HIn; simpl in *.
     destruct (last_step tb) eqn:tb_step; simpl.
     + unfold abelard_step in HIn.
@@ -980,7 +972,7 @@ Proof.
       destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
       destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
       destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
-      pose (lbp_satMate _ v Hs'2) as sm.
+      pose (lbp_mate _ v Hs'2) as sm.
       rewrite tb_step in sm; simpl in sm.
       assert (to_play s = White) as s_play.
       { apply opp_inj.
@@ -1006,11 +998,11 @@ Proof.
         clear Hforall.
         destruct (str_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
         + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
-          pose (lbp_satMate _ v G2) as sm.
+          pose (lbp_mate _ v G2) as sm.
           rewrite tb_step in sm; simpl in sm.
           destruct sm as [w' [w'_d w'_m]].
           exists w'; split; [lia|auto].
-        + pose (@tb_satMate _ v (exec_move s m') Black n) as sm.
+        + pose (@tb_mate _ v (exec_move s m') Black n) as sm.
           unfold tb_lookup in sm.
           rewrite to_play_exec_move in sm.
           rewrite s_play in sm; simpl in sm.
@@ -1052,7 +1044,7 @@ Proof.
       destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
       destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
       destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
-      pose (lbp_satMate _ v Hs'2) as sm.
+      pose (lbp_mate _ v Hs'2) as sm.
       rewrite tb_step in sm; simpl in sm.
       assert (to_play s = White) as s_play.
       { apply opp_inj.
@@ -1086,13 +1078,13 @@ Proof.
       intro pf.
       assert (S (depth w') = (curr tb)) by lia.
       apply tb_b.
-      eapply (satMate_lwp _ v s_play).
+      eapply (mate_lwp _ v s_play).
       exists w''; split; auto.
       intro. simpl. rewrite H5.
       eapply (tb_None _ v).
       unfold tb_lookup.
       now rewrite s_play.
-  (* satMate_lbp *)
+  (* mate_lbp *)
   - intros s pl s_play sm; simpl in *.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step.
@@ -1106,29 +1098,29 @@ Proof.
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1; subst.
-              pose (lbp_satMate _ v Hs'2).
-              pose (satMate_eq sm s0); lia.
+              pose (lbp_mate _ v Hs'2).
+              pose (mate_eq sm m); lia.
            ++ epose (tb_small _ v).
               unfold tb_lookup in l.
               rewrite s_play in l.
               specialize (l pf).
-              epose (tb_satMate _ v).
-              unfold tb_lookup in s0.
-              rewrite s_play in s0.
-              specialize (s0 pf).
-              pose (satMate_eq sm s0); lia.
+              epose (tb_mate _ v).
+              unfold tb_lookup in m.
+              rewrite s_play in m.
+              specialize (m pf).
+              pose (mate_eq sm m); lia.
         -- rewrite in_concat.
-           destruct (satMate_S_lemma _ v sm) as [m smm].
+           destruct (mate_S_lemma _ v sm) as [m smm].
            exists (enum_preds (exec_move s m)).
            split.
            ++ apply in_map.
-              eapply (satMate_lwp _ v).
+              eapply (mate_lwp _ v).
               rewrite to_play_exec_move, s_play; reflexivity.
               exact smm.
            ++ apply enum_preds_correct2.
       * rewrite forallb_forall.
         intros m _.
-        destruct (satMate_S_lemma _ v sm) as [m' smm'].
+        destruct (mate_S_lemma _ v sm) as [m' smm'].
         assert (to_play (exec_move s m') = White) as sm'_play
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_white _ v sm'_play smm') as Hpl.
@@ -1149,11 +1141,11 @@ Proof.
                    pose proof (enum_all m) as HIn.
                    rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
                  }
-                 epose (@tb_satMate _ v (exec_move s m)).
-                 unfold tb_lookup in s0.
-                 rewrite to_play_exec_move in s0.
-                 rewrite s_play in s0; simpl in s0.
-                 destruct (s0 _ _ pf); eauto.
+                 epose (@tb_mate _ v (exec_move s m)).
+                 unfold tb_lookup in m0.
+                 rewrite to_play_exec_move in m0.
+                 rewrite s_play in m0; simpl in m0.
+                 destruct (m0 _ _ pf); eauto.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
            destruct (str_lookup_adds_None_invert tb_sm).
@@ -1173,7 +1165,7 @@ Proof.
              exists m; split; auto.
              apply enum_all.
            }
-           assert (satMate White (exec_move b m) (curr tb)).
+           assert (mate White (exec_move b m) (curr tb)).
            { exists (w m).
              split; [lia|].
              intro w'.
@@ -1189,7 +1181,7 @@ Proof.
            simpl; split; [reflexivity|].
            rewrite in_map_iff.
            exists (exec_move b m); split; [reflexivity|].
-           eapply (satMate_lwp _ v).
+           eapply (mate_lwp _ v).
            rewrite to_play_exec_move, s_play; reflexivity.
            exact X.
     + unfold eloise_step.
@@ -1201,27 +1193,27 @@ Proof.
         -- rewrite in_map_iff in pf.
            destruct pf as [s' [Hs'1 Hs'2]].
            inversion Hs'1; subst.
-           pose (lbp_satMate _ v Hs'2).
-           pose (satMate_eq sm s0); lia.
+           pose (lbp_mate _ v Hs'2).
+           pose (mate_eq sm m); lia.
         -- epose (tb_small _ v).
            unfold tb_lookup in l.
            rewrite s_play in l.
            specialize (l pf).
-           epose (tb_satMate _ v).
-           unfold tb_lookup in s0.
-           rewrite s_play in s0.
-           specialize (s0 pf).
-           pose (satMate_eq sm s0); lia.
+           epose (tb_mate _ v).
+           unfold tb_lookup in m.
+           rewrite s_play in m.
+           specialize (m pf).
+           pose (mate_eq sm m); lia.
       * rewrite in_concat.
-        destruct (satMate_S_lemma _ v sm) as [m smm].
+        destruct (mate_S_lemma _ v sm) as [m smm].
         exists (enum_preds (exec_move s m)).
         split.
         -- apply in_map.
-           eapply (satMate_lwp _ v).
+           eapply (mate_lwp _ v).
            rewrite to_play_exec_move, s_play; reflexivity.
            exact smm.
         -- apply enum_preds_correct2.
-  (* lbp_satMate *)
+  (* lbp_mate *)
   - intros s HIn; simpl in *.
     destruct (last_step tb) eqn:tb_step; simpl.
     + unfold abelard_step in HIn.
@@ -1233,7 +1225,7 @@ Proof.
       destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
       destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
       destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
-      pose (lwp_satMate _ v Hs'2) as sm.
+      pose (lwp_mate _ v Hs'2) as sm.
       rewrite tb_step in sm; simpl in sm.
       assert (to_play s = Black) as s_play.
       { apply opp_inj.
@@ -1259,11 +1251,11 @@ Proof.
         clear Hforall.
         destruct (str_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
         + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
-          pose (lwp_satMate _ v G2) as sm.
+          pose (lwp_mate _ v G2) as sm.
           rewrite tb_step in sm; simpl in sm.
           destruct sm as [w' [w'_d w'_m]].
           exists w'; split; [lia|auto].
-        + pose (@tb_satMate _ v (exec_move s m') White n) as sm.
+        + pose (@tb_mate _ v (exec_move s m') White n) as sm.
           unfold tb_lookup in sm.
           rewrite to_play_exec_move in sm.
           rewrite s_play in sm; simpl in sm.
@@ -1305,7 +1297,7 @@ Proof.
       destruct (in_concat_sig _ _ Hs2) as [xs [Hxs1 Hxs2]].
       destruct (in_map_sig Hxs1) as [s' [Hs'1 Hs'2]]; subst.
       destruct (enum_preds_correct1 _ _ Hxs2) as [m Hm]; subst.
-      pose (lwp_satMate _ v Hs'2) as sm.
+      pose (lwp_mate _ v Hs'2) as sm.
       rewrite tb_step in sm; simpl in sm.
       assert (to_play s = Black) as s_play.
       { apply opp_inj.
@@ -1339,7 +1331,7 @@ Proof.
       intro pf.
       assert (S (depth w') = (curr tb)) by lia.
       apply tb_b.
-      eapply (satMate_lbp _ v s_play).
+      eapply (mate_lbp _ v s_play).
       exists w''; split; auto.
       intro. simpl. rewrite H5.
       eapply (tb_None _ v).
@@ -1474,34 +1466,33 @@ Proof.
   - simpl; congruence.
 Qed.
 
-Lemma satMate_drop : forall {pl s n},
-  satMate pl s (S n) ->
-  { s' : GameState G & satMate pl s' n }.
+Lemma mate_drop : forall {s : GameState G} {pl n},
+  mate pl s (S n) ->
+  { s' : GameState G & mate pl s' n }.
 Proof.
-  intros pl s n sm.
-  epose satMate_S_lemma.
+  intros s pl n sm.
   pose (TBn := Nat.iter n TB_step TB_init).
   assert (TB_valid TBn) as v_n by 
   exact (iter_step_valid _ TB_validity_data n TB_init TB_init_valid).
-  epose (satMate_S_lemma _ v_n) as sm'.
+  epose (mate_S_lemma _ v_n) as sm'.
   unfold TBn in sm'.
   rewrite iter_curr in sm'.
   destruct (sm' sm) as [m sm''].
   exists (exec_move s m); exact sm''.
 Defined.
 
-Lemma satMate_lower : forall {n pl s k}, k <= n ->
-  satMate pl s n ->
-  {s' : GameState G & satMate pl s' k}.
+Lemma mate_lower : forall {n} {s : GameState G} {pl k}, k <= n ->
+  mate pl s n ->
+  {s' : GameState G & mate pl s' k}.
 Proof.
-  induction n; intros pl s k k_le sm.
+  induction n; intros s pl k k_le sm.
   - destruct k.
     + exists s; exact sm.
     + lia.
   - destruct (le_lt_eq_dec k (S n) k_le) as [pf|pf]; clear k_le.
     + pose proof (le_S_n _ _ pf) as k_le.
-      destruct (satMate_drop sm) as [s' sm'].
-      exact (IHn pl s' k k_le sm').
+      destruct (mate_drop sm) as [s' sm'].
+      exact (IHn s' pl k k_le sm').
     + rewrite pf.
       exists s; exact sm.
 Defined.
@@ -1648,7 +1639,7 @@ Proof.
 Qed.
 
 Lemma num_left_lt : forall tb (s : GameState G) pl,
-  satMate pl s (curr tb) -> TB_valid tb ->
+  mate pl s (curr tb) -> TB_valid tb ->
   num_left (step TB_loop_data tb) < num_left tb.
 Proof.
   intros.
@@ -1670,10 +1661,10 @@ Proof.
       length (last_black_positions tb) > 0).
     { destruct (to_play s) eqn:s_play.
       + assert (In s (last_white_positions tb)).
-        { eapply (satMate_lwp _ X0); eauto. }
+        { eapply (mate_lwp _ X0); eauto. }
         pose (In_length_pos _ _ H5); lia.
       + assert (In s (last_black_positions tb)).
-        { eapply (satMate_lbp _ X0); eauto. }
+        { eapply (mate_lbp _ X0); eauto. }
         pose (In_length_pos _ _ H5); lia.
     }
     assert (
@@ -1760,8 +1751,8 @@ Proof.
   - apply (lwp_disj _ X0).
 Qed.
 
-Lemma no_final_curr_mate pl s :
-  satMate pl s (curr TB_final) -> False.
+Lemma no_final_curr_mate pl (s : GameState G) :
+  mate pl s (curr TB_final) -> False.
 Proof.
   intro sm.
   pose proof (num_left_lt TB_final s pl sm TB_final_valid).
@@ -1770,23 +1761,23 @@ Proof.
   simpl in *; lia.
 Qed.
 
-Lemma TB_final_lookup_satMate : forall s pl n,
+Theorem TB_final_lookup_mate : forall s pl n,
   tb_lookup TB_final s = Some (pl, n) ->
-  satMate pl s n.
+  mate pl s n.
 Proof.
   intros s pl n Htb.
-  exact (tb_satMate _ TB_final_valid Htb).
+  exact (tb_mate _ TB_final_valid Htb).
 Defined.
 
-Lemma satMate_TB_final_lookup : forall s pl n,
-  satMate pl s n ->
+Theorem mate_TB_final_lookup : forall s pl n,
+  mate pl s n ->
   tb_lookup TB_final s = Some (pl, n).
 Proof.
   intros s pl n sm.
   destruct (le_lt_dec (curr TB_final) n) as [pf|].
-  - destruct (satMate_lower pf sm) as [s' sm'].
+  - destruct (mate_lower pf sm) as [s' sm'].
     elim (no_final_curr_mate _ _ sm').
-  - now apply (satMate_tb _ TB_final_valid).
+  - now apply (mate_tb _ TB_final_valid).
 Qed.
 
 Lemma map_fg_lemma {X Y Z} `{Discrete Y} {f : X -> Z} {g : Y -> Z} :
@@ -1871,7 +1862,7 @@ Proof.
       pose proof (str_adds_ne_pos (map (tag White 0) (nodup Show_dec (enum_wins White)))
         s (White, 0) Hs); lia.
   - intros s pl s_res.
-    apply satMate_TB_final_lookup.
+    apply mate_TB_final_lookup.
     exists (atom_win s_res).
     split; auto.
     intro; simpl; lia.
@@ -1908,7 +1899,7 @@ Proof.
           destruct (in_map_sig pf) as [[pl' k] [tb_sm HIn]].
           pose proof (player_eqb_true _ _ (Hps2 _ HIn)); simpl in *; subst.
           symmetry in tb_sm.
-          destruct (TB_final_lookup_satMate _ _ _ tb_sm) as [w [w_d _]].
+          destruct (TB_final_lookup_mate _ _ _ tb_sm) as [w [w_d _]].
           exists w.
           rewrite w_d.
           eapply (tb_small _ TB_final_valid); eauto.
@@ -1943,7 +1934,7 @@ Proof.
         rewrite <- Hps in pf.
         rewrite in_map_iff in pf.
         destruct pf as [m [tb_sm _]].
-        destruct (TB_final_lookup_satMate _ _ _ tb_sm) as [w [w_d _]].
+        destruct (TB_final_lookup_mate _ _ _ tb_sm) as [w [w_d _]].
         apply (no_final_curr_mate (to_play s) s).
         pose (w' := eloise_win s_res eq_refl m w).
         pose proof (tb_None _ TB_final_valid w' tb_s) as pf.
@@ -1972,9 +1963,9 @@ Proof.
       destruct (tb_lookup TB_final (exec_move s m)) eqn:tb_sm.
       * destruct p as [pl n].
         destruct (player_id_or_opp_r_t (to_play s) pl) as [pf|pf].
-        ** destruct (tb_satMate TB_final TB_final_valid tb_sm) as
+        ** destruct (tb_mate TB_final TB_final_valid tb_sm) as
            [w [w_d w_m]].
-           erewrite satMate_TB_final_lookup in tb_s; [congruence|].
+           erewrite mate_TB_final_lookup in tb_s; [congruence|].
            exists (eloise_win s_res pf _ w); split; [reflexivity|].
            intro w'; simpl.
            pose (tb_None _ TB_final_valid w' tb_s).
@@ -1982,7 +1973,7 @@ Proof.
         ** right.
            rewrite pf.
            rewrite opp_invol.
-           eapply tb_satMate; [|eauto].
+           eapply tb_mate; [|eauto].
            exact TB_final_valid.
       * left.
         apply d.
@@ -1998,26 +1989,8 @@ Proof.
   intros s d.
   destruct (tb_lookup TB_final s) eqn:tb_s; [|reflexivity].
   destruct p as [pl n].
-  destruct (TB_final_lookup_satMate _ _ _ tb_s).
+  destruct (TB_final_lookup_mate _ _ _ tb_s).
   elim (win_not_draw _ _ x d).
 Qed.
-
-Theorem TB_final_lookup_mate : forall s pl n,
-  tb_lookup TB_final s = Some (pl, n) ->
-  mate pl s n.
-Proof.
-  intros s pl n tb_s.
-  destruct (TB_final_lookup_satMate _ _ _ tb_s) as [w [w_d w_s]].
-  exists w; split; auto.
-Defined.
-
-Theorem mate_TB_final_lookup : forall s pl n,
-  mate pl s n ->
-  tb_lookup TB_final s = Some (pl, n).
-Proof.
-  intros.
-  apply satMate_TB_final_lookup.
-  exact X.
-Defined.
 
 End TB.

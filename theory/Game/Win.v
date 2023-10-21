@@ -51,46 +51,6 @@ Defined.
 Definition minimal {G} {p} {s : GameState G} (w : win p s) : Prop :=
   forall (w' : win p s), depth w <= depth w'.
 
-Fixpoint saturated {G} {p} {s : GameState G} (w : win p s) : Prop :=
-  match w with
-  | atom_win _ => True
-  | @eloise_win _ _ s' _ _ _ w' => saturated w' /\
-      forall (m' : Move s') (w'' : win p (exec_move s' m')), depth w' <= depth w''
-  | abelard_win _ _ ws => forall m, saturated (ws m)
-  end.
-
-Lemma sat_lower {G} {p} {s : GameState G} : forall (w : win p s)
-  (n : nat), saturated w -> n <= depth w -> exists (s' : GameState G) (w' : win p s'), depth w' = n /\ saturated w'.
-Proof.
-  induction w; intros n w_s n_le.
-  - exists b, (atom_win e).
-    simpl in *; lia.
-  - simpl in n_le.
-    rewrite PeanoNat.Nat.le_succ_r in n_le.
-    destruct n_le.
-    + simpl in w_s; now apply IHw.
-    + rewrite H.
-      exists _, (eloise_win e e0 m w); split.
-      * reflexivity.
-      * exact w_s.
-  - simpl in n_le.
-    rewrite PeanoNat.Nat.le_succ_r in n_le.
-    destruct n_le.
-    + assert (exists m : Move b,
-        n <= depth (w m)) as [m Hm].
-      { destruct (list_max_ne_achieves (map (fun m : Move b => depth (w m))
-          (enum_moves b))).
-        * pose (map_eq_nil _ _ e1).
-          destruct (nil_atomic_res e2); congruence.
-        * rewrite in_map_iff in i.
-          destruct i as [m' Hm'].
-          exists m'; lia.
-      }
-      exact (H m n (w_s m) Hm).
-    + rewrite H0.
-      exists _, (abelard_win e e0 w); now split.
-Qed.
-
 Lemma list_max_map {X} (f g : X -> nat) (fg : forall x, f x <= g x)
   (xs : list X) : list_max (map f xs) <= list_max (map g xs).
 Proof.
@@ -100,27 +60,6 @@ Proof.
     apply PeanoNat.Nat.max_le_compat.
     + apply fg.
     + exact IHxs.
-Qed.
-
-Lemma saturated_minimal {G} {p} {s : GameState G} (w : win p s) :
-  saturated w -> minimal w.
-Proof.
-  induction w; unfold minimal; simpl; intros.
-  - lia.
-  - destruct w'.
-    + congruence.
-    + simpl.
-      destruct H.
-      pose (H0 m0 w').
-      now apply le_n_S.
-    + elim (opp_no_fp p); congruence.
-  - destruct w'.
-    + congruence.
-    + elim (opp_no_fp p); congruence.
-    + simpl.
-      apply le_n_S.
-      apply list_max_map.
-      intro; now apply H.
 Qed.
 
 Definition mate {G} (p : Player) (s : GameState G) (n : nat) : Type :=
