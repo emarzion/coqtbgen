@@ -43,13 +43,6 @@ svg {
   font-family: sans-serif;
 }
 
-.disabled {
-  color: gray;
-  background-color: white;
-  font-weight: bold;
-  font-family: sans-serif;
-}
-
 .normal {
   color:  black;
   font-family:  sans-serif;
