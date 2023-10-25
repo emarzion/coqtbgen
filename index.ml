@@ -11,6 +11,10 @@ open Strategy
 
 module Model = struct
 
+  type pre_play_state =
+    { curr_state : coq_BG_State;
+    }
+
   type play_state = 
     { curr_state : coq_BG_State;
       curr_tb_strategy : strategy;
@@ -26,7 +30,6 @@ module Model = struct
       hunter2 : Graph.coq_Vert;
       hunter3 : Graph.coq_Vert;
       to_play : Player.coq_Player;
-      tb_player : Player.coq_Player;
       curr_selected : piece option;
     }
 
@@ -60,6 +63,7 @@ module Model = struct
     | B -> { st with bear = v; curr_selected = None }
 
   type t =
+    | PrePlay of pre_play_state
     | Play of play_state
     | Edit of edit_state
     | Query of query_state
@@ -70,7 +74,6 @@ module Model = struct
       hunter2 = Obj.magic (SpokeVert(S1,Mid));
       hunter3 = Obj.magic (SpokeVert(S1,R));
       to_play = Obj.magic Player.White;
-      tb_player = Obj.magic Player.Black;
       curr_selected = None;
     }
 
@@ -83,7 +86,6 @@ type rp = rs * rf
 module Action = struct
   type t =
     | ClickMove of coq_BG_Move
-    | ClickStep
     | ClickPlayAsBlack
     | ClickPlayAsWhite
     | ClickToPlayBlack
@@ -93,12 +95,6 @@ module Action = struct
     | ClickPlay
     | ClickQuery 
 end
-
-(*
-module TODO = struct
-  let todo () = failwith "TODO"
-end
-*)
 
 module Controller = struct
   open Action
@@ -125,27 +121,13 @@ module Controller = struct
     | _ -> failwith "Error: tb_step called with Abelard strategy."
 
   let click_move mv = function
-    | Model.Play { curr_state; curr_tb_strategy; tb_player; _ } ->
-      let strat = Lazy.force curr_tb_strategy in
-        begin match strat with
-        | Coq_abelard_strategy(_,strats) ->
-          let s = exec_move RomanWheel.coq_RomanWheel curr_state mv in
-          let str' = strats (Obj.magic mv) in
-          let model = Model.
-            { curr_state = s;
-              curr_tb_strategy = str';
-              tb_player = tb_player;
-              curr_selected = None;
-            } in Model.Play (tb_step model)
-        | _ -> failwith "Error: Abelard strategy expected when clicking move."
-        end
-    | Model.Edit _ -> failwith "Error: click_move should not be triggerable in edit state."
     | Model.Query { curr_state; _ } ->
       let s = exec_move RomanWheel.coq_RomanWheel curr_state mv in
       Model.Query
         { curr_state = s;
           curr_selected = None;
         }
+    | _ -> failwith "Error: click_move only triggerable in query mode."
 
   let step m =
     let strat = Lazy.force m.Model.curr_tb_strategy in
@@ -167,11 +149,6 @@ module Controller = struct
         }
     | _ -> failwith "Error: Cannot step with Abelard strategy."
 
-  let click_step = function
-    | Model.Play m -> Model.Play (step m)
-    | Model.Edit _ -> failwith "Error: click_step should not be triggerable in edit mode."
-    | Model.Query _ -> failwith "Error: click_step should not be triggerable in query mode."
-
   let click_black tb = function
     | Model.Play { curr_state; _ } ->
       Model.Play
@@ -187,10 +164,18 @@ module Controller = struct
           hunter2 = hunter2;
           hunter3 = hunter3;
           to_play = to_play;
-          tb_player = White;
           curr_selected = curr_selected
         }
     | Model.Query _ -> failwith "Error: click_black should not be triggerable in query mode."
+    | Model.PrePlay { curr_state } ->
+      let m =
+        Model.{
+          curr_state = curr_state;
+          curr_tb_strategy = rw_tb_strat Player.White (Obj.magic curr_state) tb;
+          tb_player = White;
+          curr_selected = None
+        } in
+      Model.Play (if curr_state.to_play = White then step m else m)
 
   let click_white tb = function
     | Model.Play { curr_state; _ } ->
@@ -207,10 +192,18 @@ module Controller = struct
           hunter2 = hunter2;
           hunter3 = hunter3;
           to_play = to_play;
-          tb_player = Black;
           curr_selected = curr_selected
         }
     | Model.Query _ -> failwith "Error: click_white should not be triggerable in query mode."
+    | Model.PrePlay { curr_state } ->
+      let m =
+        Model.{
+          curr_state = curr_state;
+          curr_tb_strategy = rw_tb_strat Player.Black (Obj.magic curr_state) tb;
+          tb_player = Black;
+          curr_selected = None
+        } in
+      Model.Play (if curr_state.to_play = Black then step m else m)
 
   (* a fake update to satisfy the react signal stuff *)
   let strat_id strat =
@@ -334,8 +327,23 @@ module Controller = struct
           }
         end
       end
+  | Model.PrePlay st -> Model.PrePlay st
 
   let click_edit = function
+    | Model.PrePlay st ->
+      let (h1,h2,h3) =
+        begin match st.curr_state.hunters with
+        | [h1;h2;h3] -> (h1,h2,h3)
+        | _ -> failwith "Error: there should be exactly three hunters."
+        end in
+      Model.Edit {
+        bear = st.curr_state.bear;
+        hunter1 = h1;
+        hunter2 = h2;
+        hunter3 = h3;
+        to_play = st.curr_state.to_play;
+        curr_selected = None;
+      }
     | Model.Play st ->
       let (h1,h2,h3) =
         begin match st.curr_state.hunters with
@@ -348,7 +356,6 @@ module Controller = struct
         hunter2 = h2;
         hunter3 = h3;
         to_play = st.curr_state.to_play;
-        tb_player = st.tb_player;
         curr_selected = None;
       }
     | Model.Edit st -> Model.Edit st
@@ -364,28 +371,35 @@ module Controller = struct
         hunter2 = h2;
         hunter3 = h3;
         to_play = st.curr_state.to_play;
-        tb_player = Player.Black;
         curr_selected = None;
       }
 
-  let click_play tb = function
-    | Model.Play st -> Model.Play { st with curr_tb_strategy = strat_id st.curr_tb_strategy }
+  let click_play _tb = function
+    | Model.Play st -> Model.PrePlay
+      { curr_state = st.curr_state
+      }
     | Model.Edit st ->
       begin match make_RW_State st.to_play (Obj.magic st.bear) (Obj.magic st.hunter1) (Obj.magic st.hunter2) (Obj.magic st.hunter3) with
       | Some s ->
-        let m = Model.
+        Model.PrePlay
         { curr_state = s;
-          curr_tb_strategy = rw_tb_strat st.tb_player (Obj.magic s) tb;
-          tb_player = st.tb_player;
-          curr_selected = None;
-        } in
-        Model.Play (if st.tb_player = s.to_play then step m else m)
+        }
       | None -> failwith "Error: failed to construct state."
       end
-    | Model.Query st -> Model.Query st
+    | Model.Query st -> Model.PrePlay
+      { curr_state = st.curr_state
+      }
+    | Model.PrePlay st -> Model.PrePlay st
 
   let click_query = function
-    | Model.Play st -> Model.Play { st with curr_tb_strategy = strat_id st.curr_tb_strategy }
+    | Model.PrePlay st -> Model.Query
+      { curr_state = st.curr_state;
+        curr_selected = None      
+      }
+    | Model.Play st -> Model.Query
+      { curr_state = st.curr_state;
+        curr_selected = None
+      }
     | Model.Edit st ->
       begin match make_RW_State st.to_play (Obj.magic st.bear) (Obj.magic st.hunter1) (Obj.magic st.hunter2) (Obj.magic st.hunter3) with
       | Some s ->
@@ -407,7 +421,6 @@ module Controller = struct
 
   let update_func tb = function
     | ClickMove m -> click_move m
-    | ClickStep -> click_step
     | ClickPlayAsBlack -> click_black tb
     | ClickPlayAsWhite -> click_white tb
     | ClickPiece v -> click_piece v
@@ -491,6 +504,18 @@ module View = struct
         Js_of_ocaml_tyxml.Tyxml_js.Svg.(
           circle ~a:(a_onclick click :: circ_style @ pos_style pos) [])
         ) (Graph.coq_Graph_Vert_enum RomanWheel.coq_RomanWheel)
+    | Model.PrePlay { curr_state } ->
+      List.map (fun v ->
+        let pos = coords (Obj.magic v) in
+        let circ_style =
+          if v = curr_state.BearGame.bear
+            then black_style false else 
+            if List.mem v (curr_state.BearGame.hunters)
+              then white_style false
+              else transparent_style in
+        Js_of_ocaml_tyxml.Tyxml_js.Svg.(
+          circle ~a:(circ_style @ pos_style pos) [])
+        ) (Graph.coq_Graph_Vert_enum RomanWheel.coq_RomanWheel)
 
   let pieces tb (rs,rf) =
     let sig_pieces = ReactiveData.RList.from_signal (React.S.map (pure_pieces (rs,rf) tb) rs) in
@@ -512,7 +537,6 @@ module View = struct
         ) in
       [Tyxml_js.Html.(a ~a:[a_class ["currtext"]] [txt text])]
       )
-    | Model.Edit _ -> []
     | Model.Query s ->
       let text = (
         match ExtractQuery.query_RW_TB tb s.curr_state with
@@ -524,6 +548,7 @@ module View = struct
         | None -> "Drawn"
         ) in
       [Tyxml_js.Html.(a ~a:[a_class ["currtext"]] [txt text])]
+    | _ -> []
 
   let curr_res tb (rs,_) =
     let sig_curr = ReactiveData.RList.from_signal (React.S.map (pure_curr_res tb) rs) in
@@ -557,8 +582,7 @@ module View = struct
         Tyxml_js.Html.br ()
         ]
         ) move_tups_sorted
-    | Model.Edit _ -> []
-    | Model.Play _ -> []
+    | _ -> []
 
   let links (rs, rf) tb =
     let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links (rs, rf) tb) rs) in
@@ -567,16 +591,16 @@ module View = struct
   let normal_style = Tyxml_js.Html.a_class ["normal"]
   let deselected = Tyxml_js.Html.a_class ["deselected"]
   let selected = Tyxml_js.Html.a_class ["selected"]
-  let disabled = Tyxml_js.Html.a_class ["disabled"]
 
   let space () = Tyxml_js.Html.(a ~a:[] [txt " "])
 
   let pure_mode_toggles (rs,rf) tb x =
     let (style_e, style_p, style_q) =
       begin match x with
-      | Model.Play _ -> (deselected, selected, disabled)
+      | Model.PrePlay _ -> (deselected, selected, deselected)
+      | Model.Play _ -> (deselected, selected, deselected)
       | Model.Edit _ -> (selected, deselected, deselected)
-      | Model.Query _ -> (deselected, disabled, selected)
+      | Model.Query _ -> (deselected, deselected, selected)
       end in
     let clickedit _ =
       Controller.update ClickEdit (rs, rf) tb; true in
@@ -606,22 +630,11 @@ module View = struct
       let playing_as_text = Tyxml_js.Html.(a ~a:[normal_style] [txt "Playing as: "]) in
       [playing_as_text; player_txt]
     | Model.Edit x ->
-      let tb_pl = Model.(x.tb_player) in
       let curr_pl = Model.(x.to_play) in
-      let click_play_as_black _ =
-        Controller.update ClickPlayAsBlack (rs, rf) tb; true in
-      let click_play_as_white _ =
-        Controller.update ClickPlayAsWhite (rs, rf) tb; true in
       let click_to_play_black _ =
         Controller.update ClickToPlayBlack (rs, rf) tb; true in
       let click_to_play_white _ =
         Controller.update ClickToPlayWhite (rs, rf) tb; true in
-
-      let (tb_style_w, tb_style_b) =
-        match tb_pl with
-        | Player.White -> (deselected, selected)
-        | Player.Black -> (selected, deselected) in
-
       let (curr_style_w, curr_style_b) =
         match curr_pl with
         | Player.White -> (selected, deselected)
@@ -631,12 +644,7 @@ module View = struct
       let to_play_black = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_to_play_black; curr_style_b] [txt "black"]) in
       let to_play_white = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_to_play_white; curr_style_w] [txt "white"]) in
 
-      let play_as_black = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_play_as_black; tb_style_b] [txt "black"]) in
-      let play_as_white = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_play_as_white; tb_style_w] [txt "white"]) in
-      let play_as_text = Tyxml_js.Html.(a ~a:[normal_style] [txt "Play as: "]) in
-      [ to_play_text; space (); to_play_black; space (); to_play_white; space ();
-        play_as_text; play_as_black; space (); play_as_white
-      ]
+      [ to_play_text; space (); to_play_black; space (); to_play_white ]
     | Model.Query x ->
       let pl = Model.((x.curr_state).to_play) in
       let pl_txt =
@@ -646,6 +654,16 @@ module View = struct
       let player_txt = Tyxml_js.Html.(a ~a:[normal_style] [txt pl_txt]) in
       let to_play_text = Tyxml_js.Html.(a ~a:[normal_style] [txt "To play: "]) in
       [to_play_text; player_txt]
+    | Model.PrePlay _ ->
+      let deselected = Tyxml_js.Html.a_class ["deselected"] in
+      let click_play_as_black _ =
+        Controller.update ClickPlayAsBlack (rs, rf) tb; true in
+      let click_play_as_white _ =
+        Controller.update ClickPlayAsWhite (rs, rf) tb; true in
+      let play_as_black = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_play_as_black; deselected] [txt "black"]) in
+      let play_as_white = Tyxml_js.Html.(a ~a:[a_href "#"; a_onclick click_play_as_white; deselected] [txt "white"]) in
+      let play_as_text = Tyxml_js.Html.(a ~a:[normal_style] [txt "Play as: "]) in
+      [ play_as_text; play_as_black; space (); play_as_white ]
 
   let player_toggles (rs, rf) tb =
     let vals = ReactiveData.RList.from_signal (React.S.map (pure_player_toggles (rs, rf) tb) rs) in
