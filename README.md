@@ -1,4 +1,19 @@
 # coqtbgen
-formally verified endgame tablebase generator in coq
 
-![Bear](https://github.com/emarzion/coqtbgen/assets/18229438/e5e924d2-ae1a-43f5-8a72-2ced84ac6295)
+A formally verified endgame tablebase generator.
+
+* [Sample tablebase frontend](https://emarzion.github.io/coqtbgen/)
+* [Blog post](https://emarzion.github.io/TB-Generator/)
+
+## Build Instructions
+
+```
+opam install . --deps-only
+dune build
+```
+
+To generate a `_CoqProject` for your editor:
+
+```
+./configure.sh
+```
