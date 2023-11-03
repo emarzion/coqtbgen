@@ -1,14 +1,14 @@
-svg {
-  margin: auto;
-  width: 100%;
-  height: 100%;
-  display: block;
+
+.left-col {
+  white-space: pre;
+  float: left;
+  width: 35%;
 }
 
-.tablebase {
-  height: 200px;
-  width: 200px;
+.right-col {
   white-space: pre;
+  float: left;
+  width: 65%;
 }
 
 .whitewin {
@@ -32,6 +32,11 @@ svg {
 .selected {
   color: white;
   background-color: black;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+.normal-link {
   font-weight: bold;
   font-family: sans-serif;
 }
