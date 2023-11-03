@@ -446,12 +446,12 @@ module View = struct
 
   let black_style is_selected =
     if is_selected
-    then Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("gray", None)); a_stroke_width (4.,None); a_fill (`Color ("black", None)) ]
+    then Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("gray", None)); a_stroke_width (3.,None); a_fill (`Color ("black", None)) ]
     else Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("black", None)); a_fill (`Color ("black", None)) ]
 
   let white_style is_selected =
     if is_selected
-    then Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("gray", None)); a_stroke_width (4.,None); a_fill (`Color ("white", None)) ]
+    then Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("gray", None)); a_stroke_width (3.,None); a_fill (`Color ("white", None)) ]
     else Js_of_ocaml_tyxml.Tyxml_js.Svg.[a_r (7.5, Some `Px); a_stroke (`Color ("black", None)) ; a_fill (`Color ("white", None)) ]
 
   let transparent_style =
@@ -584,7 +584,7 @@ module View = struct
         ) move_tups_sorted
     | _ -> []
 
-  let links (rs, rf) tb =
+  let move_links (rs, rf) tb =
     let vals = ReactiveData.RList.from_signal (React.S.map (pure_move_links (rs, rf) tb) rs) in
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
 
@@ -593,6 +593,18 @@ module View = struct
   let selected = Tyxml_js.Html.a_class ["selected"]
 
   let space () = Tyxml_js.Html.(a ~a:[] [txt " "])
+
+  let help_url = "https://github.com/emarzion/coqtbgen/blob/master/bin/web/help.md"
+  let help =
+    Tyxml_js.Html.(a ~a:[a_href help_url; a_target "blank"; a_class ["normal-link"]] [txt "Help"])  
+
+  let github_url = "https://github.com/emarzion/coqtbgen"
+  let github =
+    Tyxml_js.Html.(a ~a:[a_href github_url; a_target "blank"; a_class ["normal-link"]] [txt "Github"])  
+
+  let links =
+    Js_of_ocaml_tyxml.Tyxml_js.Html.p
+      [ help; space (); github ]
 
   let pure_mode_toggles (rs,rf) tb x =
     let (style_e, style_p, style_q) =
@@ -670,35 +682,52 @@ module View = struct
     Js_of_ocaml_tyxml.Tyxml_js.R.Html.p vals
 
   let board tb (rs,rf) =
-    Tyxml_js.Html.svg (circ :: lines @ arcs @ [pieces tb (rs,rf)])
+    Tyxml_js.(Html.svg
+      ~a:[Svg.a_viewBox(0.,0.,200.,200.); Svg.a_width (400., Some `Px); Svg.a_height (400., Some `Px)]
+      (circ :: lines @ arcs @ [pieces tb (rs,rf)])
+    )
 
-  let tablebase (rs,rf) tb =
-    Tyxml_js.Html.(div ~a:[a_class ["tablebase"]] [
+  let left_col (rs,rf) tb =
+    Tyxml_js.Html.div [
+      links;
       mode_toggles (rs, rf) tb;
       player_toggles (rs, rf) tb;
       board tb (rs,rf);
-      curr_res tb (rs, rf);
-      links (rs,rf) tb;
-    ])
+    ]
 
-  let draw_stuff tb rp node =
-    Dom.appendChild node (Tyxml_js.To_dom.of_node (tablebase rp tb));
+  let right_col (rs,rf) tb =
+    Tyxml_js.Html.div [
+      curr_res tb (rs, rf);
+      move_links (rs,rf) tb;
+    ]
+
+  let draw_left tb rp node =
+    Dom.appendChild node (Tyxml_js.To_dom.of_node (left_col rp tb))
+
+  let draw_right tb rp node =
+    Dom.appendChild node (Tyxml_js.To_dom.of_node (right_col rp tb))
 
 end
 
-let start tb rp node =
-  View.draw_stuff tb rp node;
+let start tb rp node_l node_r =
+  View.draw_left tb rp node_l;
+  View.draw_right tb rp node_r;
   Lwt.return ()
    
 let main mp _ =
   let doc = Dom_html.document in
-  let parent =
-    Js.Opt.get (doc##getElementById(Js.string "beargame"))
+  let parent_l =
+    Js.Opt.get (doc##getElementById(Js.string "left-col"))
+      (fun () -> assert false)
+    in
+  let parent_r =
+    Js.Opt.get (doc##getElementById(Js.string "right-col"))
       (fun () -> assert false)
     in
   let rp = React.S.create Model.init in
-    start mp rp parent
+    start mp rp parent_l parent_r
 
 let _ =
   let mp = make_tb in
   Js_of_ocaml_lwt.Lwt_js_events.onload () >>= (main (Obj.magic mp))
+
