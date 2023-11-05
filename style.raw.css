@@ -11,6 +11,13 @@
   width: 65%;
 }
 
+@media (max-width: 768px) {
+  .left-col, .right-col {
+    width: 100%; /* Set both columns to 100% width */
+    float: none; /* Remove the float property */
+  }
+}
+
 .whitewin {
   color: black;
   background-color: white;
