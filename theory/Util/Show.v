@@ -69,10 +69,12 @@ Class Nonnil (X : Type) `{Show X} := {
   nonnil : forall x, show x <> ""
   }.
 
+Definition str_comma : string := ",".
+
 Global Instance Show_Prod {X Y} `{CommaFree X, CommaFree Y} : Show (X * Y).
 Proof.
   apply (Build_Show _
-    (fun '(x,y) => show x ++ "," ++ show y)).
+    (fun '(x,y) => show x ++ str_comma ++ show y)).
   intros [x y] [x' y'] pair_eq.
   inversion pair_eq.
   destruct (char_free_split H4); try apply comma_free.
@@ -113,11 +115,16 @@ Proof.
       eapply IHpre; eauto.
 Qed.
 
+Definition str_LB : string := "[".
+Definition str_RB : string := "]".
+Definition str_SC : string := ";".
+
+
 Global Instance Show_list {X} `{sh : Show X}
   `{@SemicolonFree X sh, @Nonnil X sh} : Show (list X).
 Proof.
   refine {|
-    show xs := "[" ++ String.concat ";" (List.map show xs) ++ "]";
+    show xs := str_LB ++ String.concat str_SC (List.map show xs) ++ str_RB;
     show_inj := _
   |}.
   intro xs; induction xs; intro ys.
@@ -144,7 +151,8 @@ Proof.
         apply (string_app_lemma _ _ "]").
         now inversion Heq.
       * absurd (char_free ";" (String "[" (show a ++ "]"))).
-        -- rewrite Heq; simpl.
+        -- unfold str_RB in Heq.
+           rewrite Heq; simpl.
            repeat rewrite char_free_app; simpl.
            firstorder.
         -- simpl; split; [discriminate|].
@@ -152,7 +160,8 @@ Proof.
            ++ apply semicolon_free.
            ++ simpl; now split.
       * absurd (char_free ";" (String "[" (show x ++ "]"))).
-        -- rewrite <- Heq; simpl.
+        -- unfold str_RB in Heq.
+           rewrite <- Heq; simpl.
            repeat rewrite char_free_app; simpl.
            firstorder.
         -- simpl; split; [discriminate|].
