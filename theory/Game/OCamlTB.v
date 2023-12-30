@@ -55,17 +55,42 @@ Arguments query_draw {_} {_} {_} {_}.
 Definition certified_TB {M} `{StringMap M}
   {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
-  OCamlTablebase G := {|
-  tb_whites := white_positions TB_final;
-  tb_blacks := black_positions TB_final;
-  |}.
+  OCamlTablebase G :=
+  match TB_final with
+  | Build_TB _ _ wps bps _ _ =>
+    {|
+      tb_whites := wps;
+      tb_blacks := bps;
+    |}
+  end.
+
+Lemma certified_TB_whites {M} `{StringMap M}
+  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  tb_whites certified_TB = white_positions TB_final.
+Proof.
+  unfold certified_TB.
+  destruct TB_final; reflexivity.
+Qed.
+
+Lemma certified_TB_blacks {M} `{StringMap M}
+  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  tb_blacks certified_TB = black_positions TB_final.
+Proof.
+  unfold certified_TB.
+  destruct TB_final; reflexivity.
+Qed.
 
 Lemma certified_TB_correct {M} `{StringMap M}
   {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   CorrectTablebase certified_TB.
 Proof.
-  constructor.
+  constructor;
+  unfold query_TB;
+  rewrite certified_TB_whites;
+  rewrite certified_TB_blacks.
   - apply TB_final_lookup_mate.
   - apply mate_TB_final_lookup.
   - apply TB_final_lookup_draw.

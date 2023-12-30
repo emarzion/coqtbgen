@@ -514,12 +514,16 @@ Proof.
   f_equal; apply proof_irrelevance.
 Qed.
 
+Definition strLP : string := "(".
+Definition strComma : string := ",".
+Definition strRP : string := ")".
+
 Global Instance BearGameStateShow {G} `{sh : Show (Vert G)}
   `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh} : Show (GameState (BearGame G)).
 Proof.
   simpl.
   refine {|
-    show := fun s => "(" ++ show (to_play s) ++ "," ++ show (bear s) ++ "," ++ show (hunters s) ++ ")";
+    show := fun s => strLP ++ show (to_play s) ++ strComma ++ show (bear s) ++ strComma ++ show (hunters s) ++ strRP;
     show_inj := _
   |}.
   intros s s' pf.
