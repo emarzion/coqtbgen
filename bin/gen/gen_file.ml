@@ -9,11 +9,11 @@ let print_player pl =
   | Black -> "Black"
 
 let tup_to_json tup : string * t =
-  let (str, (pl, n)) = tup in
+  let (i, (pl, n)) = tup in
   let pl_t = `String (print_player pl) in
   let n_t = `Int n in
   let pair_t = `Tuple [pl_t; n_t] in
-  (str, pair_t)
+  (string_of_int i, pair_t)
 
 let tups_to_json tups =
   `Assoc (List.map tup_to_json tups)

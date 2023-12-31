@@ -1,11 +1,8 @@
 open Yojson.Safe
 
-open Extracted_code
-open TBGen
-
 let json_to_tup = function
-  | (str, `Tuple [`String "White"; `Int n]) -> (str, (White, n))
-  | (str, `Tuple [`String "Black"; `Int n]) -> (str, (Black, n))
+  | (i_str, `Tuple [`String "White"; `Int n]) -> (Int64.of_string i_str, (Player.White, n))
+  | (i_str, `Tuple [`String "Black"; `Int n]) -> (Int64.of_string i_str, (Player.Black, n))
   | _ -> failwith "Error converting json to tuple."
 
 let json_to_tups = function
@@ -23,4 +20,4 @@ let make_tb =
   let m_b = List.fold_left (fun m (str, pr) -> M.insert str pr m) M.empty tups_b in
   let () = close_in inc_w in
   let () = close_in inc_b in
-  { tb_whites = m_w; tb_blacks = m_b }
+  { OCamlTB.tb_whites = m_w; OCamlTB.tb_blacks = m_b }

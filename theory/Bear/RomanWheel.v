@@ -1,10 +1,10 @@
 Require Import List.
 Import ListNotations.
 
-Require Import String.
-Open Scope string_scope.
+Require Import PrimInt63.
+Require Import Uint63.
 
-Require Import Games.Util.Show.
+Require Import Games.Util.IntHash.
 Require Import Games.Bear.Graph.
 Require Import Games.Bear.BearGame.
 Require Import Games.Game.TB.
@@ -39,40 +39,8 @@ Definition c_clockwise (s : Spoke) : Spoke :=
 Definition list_spokes :=
   [S1;S2;S3;S4;S5;S6;S7;S8].
 
-Definition str1 : string := "1".
-Definition str2 : string := "2".
-Definition str3 : string := "3".
-Definition str4 : string := "4".
-Definition str5 : string := "5".
-Definition str6 : string := "6".
-Definition str7 : string := "7".
-Definition str8 : string := "8".
-
-Definition show_spoke (s : Spoke) : string := (
-  match s with
-  | S1 => str1
-  | S2 => str2
-  | S3 => str3
-  | S4 => str4
-  | S5 => str5
-  | S6 => str6
-  | S7 => str7
-  | S8 => str8
-  end)%string.
-
 Inductive SpokeLoc :=
   Mid | L | R.
-
-Definition strM : string := "M".
-Definition strL : string := "L".
-Definition strR : string := "R".
-
-Definition show_loc (l : SpokeLoc) : string := (
-  match l with
-  | Mid => strM
-  | L => strL
-  | R => strR
-  end)%string.
 
 Definition list_locs :=
   [Mid;L;R].
@@ -81,119 +49,46 @@ Inductive RWVert :=
   | Center
   | SpokeVert (s : Spoke) (l : SpokeLoc).
 
-Lemma show_loc_inj : forall l l',
-  show_loc l = show_loc l' -> l = l'.
-Proof.
-  intros l l'.
-  destruct l, l'; simpl;
-  (discriminate || reflexivity).
-Qed.
-
-Lemma spoke_loc : forall s s' l l',
-  show_spoke s ++ show_loc l =
-  show_spoke s' ++ show_loc l' ->
-  s = s' /\ l = l'.
-Proof.
-  intros s s' l l' pf.
-  destruct s, s'; try inversion pf;
-  (split; [reflexivity|now apply show_loc_inj]).
-Qed.
-
-Definition strC : string := "C".
-Definition str1L : string := "1L".
-Definition str1M : string := "1M".
-Definition str1R : string := "1R".
-Definition str2L : string := "2L".
-Definition str2M : string := "2M".
-Definition str2R : string := "2R".
-Definition str3L : string := "3L".
-Definition str3M : string := "3M".
-Definition str3R : string := "3R".
-Definition str4L : string := "4L".
-Definition str4M : string := "4M".
-Definition str4R : string := "4R".
-Definition str5L : string := "5L".
-Definition str5M : string := "5M".
-Definition str5R : string := "5R".
-Definition str6L : string := "6L".
-Definition str6M : string := "6M".
-Definition str6R : string := "6R".
-Definition str7L : string := "7L".
-Definition str7M : string := "7M".
-Definition str7R : string := "7R".
-Definition str8L : string := "8L".
-Definition str8M : string := "8M".
-Definition str8R : string := "8R".
-
-Definition show_RWVert (v : RWVert) : string :=
+Definition hash_RWVert (v : RWVert) : int :=
   match v with
-  | Center => strC
-  | SpokeVert S1 L => str1L
-  | SpokeVert S1 Mid => str1M
-  | SpokeVert S1 R => str1R
-  | SpokeVert S2 L => str2L
-  | SpokeVert S2 Mid => str2M
-  | SpokeVert S2 R => str2R
-  | SpokeVert S3 L => str3L
-  | SpokeVert S3 Mid => str3M
-  | SpokeVert S3 R => str3R
-  | SpokeVert S4 L => str4L
-  | SpokeVert S4 Mid => str4M
-  | SpokeVert S4 R => str4R
-  | SpokeVert S5 L => str5L
-  | SpokeVert S5 Mid => str5M
-  | SpokeVert S5 R => str5R
-  | SpokeVert S6 L => str6L
-  | SpokeVert S6 Mid => str6M
-  | SpokeVert S6 R => str6R
-  | SpokeVert S7 L => str7L
-  | SpokeVert S7 Mid => str7M
-  | SpokeVert S7 R => str7R
-  | SpokeVert S8 L => str8L
-  | SpokeVert S8 Mid => str8M
-  | SpokeVert S8 R => str8R
+  | Center => 0
+  | SpokeVert S1 L => 1
+  | SpokeVert S1 Mid => 2
+  | SpokeVert S1 R => 3
+  | SpokeVert S2 L => 4
+  | SpokeVert S2 Mid => 5
+  | SpokeVert S2 R => 6
+  | SpokeVert S3 L => 7
+  | SpokeVert S3 Mid => 8
+  | SpokeVert S3 R => 9
+  | SpokeVert S4 L => 10
+  | SpokeVert S4 Mid => 11
+  | SpokeVert S4 R => 12
+  | SpokeVert S5 L => 13
+  | SpokeVert S5 Mid => 14
+  | SpokeVert S5 R => 15
+  | SpokeVert S6 L => 16
+  | SpokeVert S6 Mid => 17
+  | SpokeVert S6 R => 18
+  | SpokeVert S7 L => 19
+  | SpokeVert S7 Mid => 20
+  | SpokeVert S7 R => 21
+  | SpokeVert S8 L => 22
+  | SpokeVert S8 Mid => 23
+  | SpokeVert S8 R => 24
   end.
 
-Global Instance Show_RWVert : Show RWVert. refine {|
-  show := show_RWVert;
-  show_inj := _;
+Lemma hash_RWVert_inj : forall v v',
+  hash_RWVert v = hash_RWVert v' -> v = v'.
+Proof.
+  intros [|[] []] [|[] []]; simpl; intro pf; try reflexivity; 
+  discriminate (f_equal to_Z pf).
+Qed.
+
+Global Instance IntHash_RWVert : IntHash RWVert := {|
+  hash := hash_RWVert;
+  hash_inj := hash_RWVert_inj;
   |}.
-Proof.
-  - intros v v'.
-    destruct v as [|[] []];
-    destruct v' as [|[] []]; try reflexivity.
-    all: discriminate.
-Defined.
-
-Global Instance RWVert_Nonnil : Nonnil RWVert.
-Proof.
-  constructor.
-  destruct x; simpl.
-  - discriminate.
-  - destruct s; destruct l; discriminate.
-Qed.
-
-Global Instance RWVert_CommaFree : CommaFree RWVert.
-Proof.
-  constructor.
-  destruct x.
-  - simpl; repeat split; discriminate.
-  - unfold show.
-    unfold Show_RWVert.
-    destruct s, l; simpl;
-    repeat split; discriminate.
-Qed.
-
-Global Instance RWVert_Semicolon : SemicolonFree RWVert.
-Proof.
-  constructor.
-  destruct x.
-  - simpl; repeat split; discriminate.
-  - unfold show.
-    unfold Show_RWVert.
-    destruct s, l; simpl;
-    repeat split; discriminate.
-Qed.
 
 Lemma NoDup_list_locs : NoDup list_locs.
 Proof.
@@ -342,7 +237,38 @@ Proof.
         now inversion Heq.
 Defined.
 
-Global Instance Show_RWV : Show (Vert RomanWheel) :=
-  Show_RWVert.
+Global Instance IntHash_RWV : IntHash (Vert RomanWheel) :=
+  IntHash_RWVert.
+
+Definition add_vert (v : Vert RomanWheel) (i : int) : int :=
+  (hash v) lor (i << 5).
+
+Definition add_player (p : Player.Player) (i : int) : int :=
+  match p with
+  | Player.White => i << 1
+  | Player.Black => 1 lor (i << 1)
+  end.
+
+Definition get_player (i : int) : Player.Player * int :=
+  match is_even i with
+  | true => (Player.White, i >> 1)
+  | false => (Player.Black, i >> 1)
+  end%uint63.
+
+Definition hash_RW_State (s : BG_State RomanWheel) : int :=
+  match s with
+  | Build_BG_State _ p b hs _ _ _ _ =>
+      add_player p (add_vert b (fold_right add_vert 0%uint63 hs))
+  end.
+
+Lemma hash_RW_State_inj : forall s s',
+  hash_RW_State s = hash_RW_State s' -> s = s'.
+Proof.
+Admitted.
+
+Global Instance IntHash_RW : IntHash (Game.GameState (BearGame RomanWheel)) := {|
+  hash := hash_RW_State;
+  hash_inj := hash_RW_State_inj;
+  |}.
 
 Definition RW_TB := Bear_TB RomanWheel.

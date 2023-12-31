@@ -7,9 +7,11 @@ Require Import Extraction.
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlNativeString.
+Require Import ExtrOCamlInt63.
 Extraction Language OCaml.
 
 Require Import Games.Util.Show.
+Require Import Games.Util.IntHash.
 Require Import Games.Util.OMap.
 Require Import Games.Bear.Sort.
 Require Import Games.Bear.BearGame.
@@ -69,6 +71,72 @@ Proof.
     intros [|[|[|]]]; auto; discriminate.
 Defined.
 
+Definition strC : string := "C".
+Definition str1L : string := "1L".
+Definition str1M : string := "1M".
+Definition str1R : string := "1R".
+Definition str2L : string := "2L".
+Definition str2M : string := "2M".
+Definition str2R : string := "2R".
+Definition str3L : string := "3L".
+Definition str3M : string := "3M".
+Definition str3R : string := "3R".
+Definition str4L : string := "4L".
+Definition str4M : string := "4M".
+Definition str4R : string := "4R".
+Definition str5L : string := "5L".
+Definition str5M : string := "5M".
+Definition str5R : string := "5R".
+Definition str6L : string := "6L".
+Definition str6M : string := "6M".
+Definition str6R : string := "6R".
+Definition str7L : string := "7L".
+Definition str7M : string := "7M".
+Definition str7R : string := "7R".
+Definition str8L : string := "8L".
+Definition str8M : string := "8M".
+Definition str8R : string := "8R".
+
+Definition show_RWVert (v : RWVert) : string :=
+  match v with
+  | Center => strC
+  | SpokeVert S1 L => str1L
+  | SpokeVert S1 Mid => str1M
+  | SpokeVert S1 R => str1R
+  | SpokeVert S2 L => str2L
+  | SpokeVert S2 Mid => str2M
+  | SpokeVert S2 R => str2R
+  | SpokeVert S3 L => str3L
+  | SpokeVert S3 Mid => str3M
+  | SpokeVert S3 R => str3R
+  | SpokeVert S4 L => str4L
+  | SpokeVert S4 Mid => str4M
+  | SpokeVert S4 R => str4R
+  | SpokeVert S5 L => str5L
+  | SpokeVert S5 Mid => str5M
+  | SpokeVert S5 R => str5R
+  | SpokeVert S6 L => str6L
+  | SpokeVert S6 Mid => str6M
+  | SpokeVert S6 R => str6R
+  | SpokeVert S7 L => str7L
+  | SpokeVert S7 Mid => str7M
+  | SpokeVert S7 R => str7R
+  | SpokeVert S8 L => str8L
+  | SpokeVert S8 Mid => str8M
+  | SpokeVert S8 R => str8R
+  end.
+
+Global Instance Show_RWVert : Show RWVert. refine {|
+  show := show_RWVert;
+  show_inj := _;
+  |}.
+Proof.
+  - intros v v'.
+    destruct v as [|[] []];
+    destruct v' as [|[] []]; try reflexivity.
+    all: discriminate.
+Defined.
+
 Definition print_RW_move {s : BG_State RomanWheel}
   (m : BG_Move s) : string.
 Proof.
@@ -84,10 +152,6 @@ Extraction Blacklist String List.
 Definition RW_exec_move (s : BG_State RomanWheel)
  : BG_Move s -> BG_State RomanWheel :=
   exec_move.
-
-Definition show_RW_State (s : BG_State RomanWheel)
-  : string :=
-  show s.
 
 Definition query_RW_TB :
   OCamlTablebase (BearGame RomanWheel) ->
@@ -106,7 +170,6 @@ Separate Extraction
   RW_exec_move
   BearGame.enum_moves
   print_RW_move
-  show_RW_State
   query_RW_TB
   p_leb
   rw_tb_strat

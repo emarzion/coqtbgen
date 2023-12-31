@@ -9,17 +9,19 @@
     ExtractQuery
     Game
     Graph
+    IntHash
+    IntMap
     List0
     OCamlTB
     OMap
     Player
+    PrimInt63
     RomanWheel
     Show
     Sort
     Specif
     Strategy
     String0
-    StringMap
     TB
   )
   (theories Games))
@@ -29,6 +31,7 @@
   (modules
     ;; Patch code
     M
+    Uint63
 
     ;; Extracted code
     Ascii
@@ -39,17 +42,19 @@
     ExtractQuery
     Game
     Graph
+    IntHash
+    IntMap
     List0
     OCamlTB
     OMap
     Player
+    PrimInt63
     RomanWheel
     Show
     Sort
     Specif
     Strategy
     String0
-    StringMap
     TB
 
     ;; Ocaml code
