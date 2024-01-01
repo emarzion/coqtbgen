@@ -523,6 +523,11 @@ module View = struct
       svg [Js_of_ocaml_tyxml.Tyxml_js.R.Svg.g sig_pieces]
     )
 
+  let print_player pl =
+    match pl with
+    | Player.White -> "White"
+    | Player.Black -> "Black"
+
   let pure_curr_res tb x =
     match x with
     | Model.Play { curr_state; _ } -> (
@@ -530,7 +535,7 @@ module View = struct
         match BearGame.atomic_res RomanWheel.coq_RomanWheel curr_state with
         | Some res -> (
           match res with
-          | Game.Win pl -> Player.show_player pl ^ " wins!"
+          | Game.Win pl -> print_player pl ^ " wins!"
           | Game.Draw -> "Drawn."
           )
         | None -> " "

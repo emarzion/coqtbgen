@@ -11,8 +11,8 @@ Require Import Games.Game.Win.
 Require Import Games.Game.Strategy.
 
 (*Require Import Games.Util.TBLoop.*)
-Require Import Games.Util.StringMap.
-Require Import Games.Util.Show.
+Require Import Games.Util.IntMap.
+Require Import Games.Util.IntHash.
 Require Import Games.Util.Dec.
 Require Import Games.Util.NewLoop.
 
@@ -56,11 +56,11 @@ Context {G : Game}.
 Context `{FinGame G}.
 Context `{NiceGame G}.
 Context `{Reversible G}.
-Context `{Show (GameState G)}.
+Context `{IntHash (GameState G)}.
 Context `{forall s : GameState G, Discrete (Move s)}.
 
 Context {M : Type -> Type}.
-Context `{StringMap M}.
+Context `{IntMap M}.
 
 Inductive Step :=
   | Eloise : Step
@@ -93,8 +93,8 @@ Record TB : Type := {
 
 Definition tb_lookup (tb : TB) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => str_lookup s (white_positions tb)
-  | Black => str_lookup s (black_positions tb)
+  | White => hash_lookup s (white_positions tb)
+  | Black => hash_lookup s (black_positions tb)
   end.
 
 Definition tag (winner : Player) (n : nat) (s : GameState G) :=
@@ -102,7 +102,7 @@ Definition tag (winner : Player) (n : nat) (s : GameState G) :=
 
 Definition add_positions (m : M (Player * nat)) (winner : Player) (n : nat)
   (ps : list (GameState G)) : M (Player * nat) :=
-  str_adds (map (tag winner n) ps) m.
+  hash_adds (map (tag winner n) ps) m.
 
 Fixpoint filter_Nones_aux {X Y} (acc : list X) (f : X -> option Y) (xs : list X) : list X :=
   match xs with
@@ -186,8 +186,8 @@ Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
     end in
   let candidates := concat (map enum_preds prev) in
   let candidates' :=
-    filter_Nones (fun s => str_lookup s m) candidates in
-  nodup Show_dec candidates'.
+    filter_Nones (fun s => hash_lookup s m) candidates in
+  nodup IntHash_dec candidates'.
 
 Definition abelard_step (tb : TB) (pl : Player) : list (GameState G) :=
   let prev :=
@@ -227,14 +227,14 @@ Definition abelard_step (tb : TB) (pl : Player) : list (GameState G) :=
     end in
   let candidates := concat (map enum_preds prev) in
   let candidates' :=
-    filter_Nones (fun s => str_lookup s m) candidates in
+    filter_Nones (fun s => hash_lookup s m) candidates in
   let candidates'' := filter
     (fun s => forallb (fun m =>
-      match str_lookup (exec_move s m) m' with
+      match hash_lookup (exec_move s m) m' with
       | Some (pl',_) => player_eqb (opp pl) pl'
       | None => false
       end) (enum_moves s)) candidates' in
-  nodup Show_dec candidates''.
+  nodup IntHash_dec candidates''.
 
 Definition TB_init : TB := {|
   curr := 0;
@@ -243,8 +243,8 @@ Definition TB_init : TB := {|
   white_positions := empty;
   black_positions := empty;
 
-  last_white_positions := nodup Show_dec (enum_wins Black);
-  last_black_positions := nodup Show_dec (enum_wins White);
+  last_white_positions := nodup IntHash_dec (enum_wins Black);
+  last_black_positions := nodup IntHash_dec (enum_wins White);
   |}.
 
 Definition TB_step (tb : TB) : TB := {|
@@ -285,10 +285,10 @@ Proof.
   unfold num_left.
   intros []; simpl.
   unfold add_positions.
-  pose proof (str_size_adds_le
+  pose proof (hash_size_adds_le
     (map (tag (step_player last_step0 White) curr0) last_white_positions0)
     white_positions0).
-  pose proof (str_size_adds_le
+  pose proof (hash_size_adds_le
     (map (tag (step_player last_step0 Black) curr0) last_black_positions0)
     black_positions0).
   lia.
@@ -321,11 +321,11 @@ Record TB_valid (tb : TB) : Type := {
     n < curr tb;
 
   tb_white : forall {s pl n},
-    str_lookup s (white_positions tb) = Some (pl, n) ->
+    hash_lookup s (white_positions tb) = Some (pl, n) ->
     to_play s = White;
 
   tb_black : forall {s pl n},
-    str_lookup s (black_positions tb) = Some (pl, n) ->
+    hash_lookup s (black_positions tb) = Some (pl, n) ->
     to_play s = Black;
 
   tb_None : forall {s pl} (w : win pl s),
@@ -354,9 +354,9 @@ Record TB_valid (tb : TB) : Type := {
 
   lbp_NoDup : NoDup (last_black_positions tb);
 
-  lwp_disj : forall s, In s (last_white_positions tb) -> str_lookup s (white_positions tb) = None;
+  lwp_disj : forall s, In s (last_white_positions tb) -> hash_lookup s (white_positions tb) = None;
 
-  lbp_disj : forall s, In s (last_black_positions tb) -> str_lookup s (black_positions tb) = None;
+  lbp_disj : forall s, In s (last_black_positions tb) -> hash_lookup s (black_positions tb) = None;
 
   lwp_white : forall s, In s (last_white_positions tb) -> to_play s = White;
 
@@ -422,15 +422,15 @@ Proof.
   - intros s pl n Htb.
     unfold tb_lookup, TB_init in Htb; simpl in Htb.
     destruct (to_play s);
-    now rewrite str_lookup_empty in Htb.
+    now rewrite hash_lookup_empty in Htb.
   - intros s pl n Htb.
     unfold tb_lookup, TB_init in Htb; simpl in Htb.
     destruct (to_play s);
-    now rewrite str_lookup_empty in Htb.
+    now rewrite hash_lookup_empty in Htb.
   - intros s pl n Htb; simpl in Htb.
-    now rewrite str_lookup_empty in Htb.
+    now rewrite hash_lookup_empty in Htb.
   - intros s pl n Htb; simpl in Htb.
-    now rewrite str_lookup_empty in Htb.
+    now rewrite hash_lookup_empty in Htb.
   - intros; simpl; lia.
   - intros s pl s_play [w [w_d _]].
     destruct w; simpl in *; try lia.
@@ -457,9 +457,9 @@ Proof.
   - apply NoDup_nodup.
   - apply NoDup_nodup.
   - intros.
-    now apply str_lookup_empty.
+    now apply hash_lookup_empty.
   - intros.
-    now apply str_lookup_empty.
+    now apply hash_lookup_empty.
   - intros s HIn; simpl in *.
     rewrite nodup_In in HIn.
     pose proof (enum_wins_correct1 _ _ HIn) as s_res.
@@ -687,7 +687,7 @@ Proof.
       destruct (to_play s) eqn:s_play.
       * simpl.
         unfold add_positions.
-        rewrite str_lookup_adds_nIn; auto.
+        rewrite hash_lookup_adds_nIn; auto.
         rewrite map_map.
         unfold tag; simpl.
         rewrite map_id.
@@ -695,7 +695,7 @@ Proof.
         rewrite lwp_disj in Htb; congruence.
       * simpl.
         unfold add_positions.
-        rewrite str_lookup_adds_nIn; auto.
+        rewrite hash_lookup_adds_nIn; auto.
         rewrite map_map.
         unfold tag; simpl.
         rewrite map_id.
@@ -706,7 +706,7 @@ Proof.
       destruct (to_play s) eqn:s_play.
       * simpl.
         unfold add_positions.
-        erewrite str_lookup_adds;
+        erewrite hash_lookup_adds;
         [reflexivity| apply map_tag_functional|].
         rewrite in_map_iff.
         exists s.
@@ -717,7 +717,7 @@ Proof.
         now rewrite Hpl.
       * simpl.
         unfold add_positions.
-        erewrite str_lookup_adds;
+        erewrite hash_lookup_adds;
         [reflexivity| apply map_tag_functional|].
         rewrite in_map_iff.
         exists s.
@@ -732,7 +732,7 @@ Proof.
     destruct (to_play s) eqn:s_play.
     + simpl in Htb.
       unfold add_positions in Htb.
-      destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+      destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
         unfold tag in Hs'1.
         epose (lwp_mate _ v Hs'2).
@@ -743,7 +743,7 @@ Proof.
         now rewrite s_play.
     + simpl in Htb.
       unfold add_positions in Htb.
-      destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+      destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
         unfold tag in Hs'1.
         epose (lbp_mate _ v Hs'2).
@@ -756,14 +756,14 @@ Proof.
   - intros s pl n Htb.
     unfold tb_lookup in Htb.
     destruct (to_play s) eqn:s_play; simpl in *.
-    + destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+    + destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * rewrite in_map_iff in pf.
         destruct pf as [s' [Hs'1 Hs'2]].
         inversion Hs'1; lia.
       * cut (n < curr tb); [lia|].
         eapply (tb_small _ v).
         unfold tb_lookup; rewrite s_play; eauto.
-    + destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+    + destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
       * rewrite in_map_iff in pf.
         destruct pf as [s' [Hs'1 Hs'2]].
         inversion Hs'1; lia.
@@ -773,7 +773,7 @@ Proof.
   (* tb_white *)
   - intros s pl n Htb.
     simpl in Htb.
-    destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+    destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
     + rewrite in_map_iff in pf.
       destruct pf as [s' [Hs'1 Hs'2]].
       inversion Hs'1; subst.
@@ -782,7 +782,7 @@ Proof.
   (* tb_black *)
   - intros s pl n Htb.
     simpl in Htb.
-    destruct (str_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
+    destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
     + rewrite in_map_iff in pf.
       destruct pf as [s' [Hs'1 Hs'2]].
       inversion Hs'1; subst.
@@ -793,7 +793,7 @@ Proof.
     unfold tb_lookup in tb_s.
     simpl in *.
     destruct (to_play s) eqn:s_play.
-    + destruct (str_lookup_adds_None_invert tb_s) as [s_lwp tb'_s].
+    + destruct (hash_lookup_adds_None_invert tb_s) as [s_lwp tb'_s].
       epose proof (tb_None _ v w) as Hs.
       unfold tb_lookup in Hs.
       rewrite s_play in Hs.
@@ -812,7 +812,7 @@ Proof.
       rewrite e.
       apply (tb_None _ v w').
       unfold tb_lookup; now rewrite s_play.
-    + destruct (str_lookup_adds_None_invert tb_s) as [s_lbp tb'_s].
+    + destruct (hash_lookup_adds_None_invert tb_s) as [s_lbp tb'_s].
       epose proof (tb_None _ v w) as Hs.
       unfold tb_lookup in Hs.
       rewrite s_play in Hs.
@@ -841,7 +841,7 @@ Proof.
         -- rewrite tb_step; simpl.
            apply not_Some_None.
            intros [pl' n] tb_s.
-           destruct (str_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
+           destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1; subst.
@@ -872,8 +872,8 @@ Proof.
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_black _ v sm'_play smm') as Hpl.
         rewrite tb_step in Hpl; simpl in Hpl.
-        destruct str_lookup as [[pl' n']|] eqn:tb_sm.
-        -- destruct (str_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
+        destruct hash_lookup as [[pl' n']|] eqn:tb_sm.
+        -- destruct (hash_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1.
@@ -895,7 +895,7 @@ Proof.
                  destruct (m0 _ _ pf); eauto.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
-           destruct (str_lookup_adds_None_invert tb_sm).
+           destruct (hash_lookup_adds_None_invert tb_sm).
            destruct sm as [w [w_d wm]].
            destruct w; [simpl in w_d; lia|congruence|].
            pose (tb_None _ v (w m)).
@@ -936,7 +936,7 @@ Proof.
       rewrite In_filter_Nones_iff; split.
       * apply not_Some_None.
         intros [pl' n] tb_s.
-        destruct (str_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
+        destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
         -- rewrite in_map_iff in pf.
            destruct pf as [s' [Hs'1 Hs'2]].
            inversion Hs'1; subst.
@@ -992,11 +992,11 @@ Proof.
       assert (forall m, {w : win Black (exec_move s m) & depth w <= curr tb /\ minimal w}).
       { intro m'.
         specialize (Hforall m' (enum_all m')).
-        destruct (str_lookup (exec_move s m')
+        destruct (hash_lookup (exec_move s m')
           (add_positions (black_positions tb) Black (curr tb)
           (last_black_positions tb))) as [[[|] n]|] eqn:Hsm; try congruence.
         clear Hforall.
-        destruct (str_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
+        destruct (hash_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
         + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
           pose (lbp_mate _ v G2) as sm.
           rewrite tb_step in sm; simpl in sm.
@@ -1065,7 +1065,7 @@ Proof.
       destruct w'; simpl in *; try congruence.
       apply le_n_S.
       rewrite w_d.
-      destruct (str_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
+      destruct (hash_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
       pose (w'' := eloise_win s_res s_play m0 w').
       epose proof (tb_None _ v w'') as Hw'.
       unfold tb_lookup in Hw'.
@@ -1094,7 +1094,7 @@ Proof.
         -- rewrite tb_step; simpl.
            apply not_Some_None.
            intros [pl' n] tb_s.
-           destruct (str_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
+           destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1; subst.
@@ -1125,8 +1125,8 @@ Proof.
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_white _ v sm'_play smm') as Hpl.
         rewrite tb_step in Hpl; simpl in Hpl.
-        destruct str_lookup as [[pl' n']|] eqn:tb_sm.
-        -- destruct (str_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
+        destruct hash_lookup as [[pl' n']|] eqn:tb_sm.
+        -- destruct (hash_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
            ++ rewrite in_map_iff in pf.
               destruct pf as [s' [Hs'1 Hs'2]].
               inversion Hs'1.
@@ -1148,7 +1148,7 @@ Proof.
                  destruct (m0 _ _ pf); eauto.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
-           destruct (str_lookup_adds_None_invert tb_sm).
+           destruct (hash_lookup_adds_None_invert tb_sm).
            destruct sm as [w [w_d wm]].
            destruct w; [simpl in w_d; lia|congruence|].
            pose (tb_None _ v (w m)).
@@ -1189,7 +1189,7 @@ Proof.
       rewrite In_filter_Nones_iff; split.
       * apply not_Some_None.
         intros [pl' n] tb_s.
-        destruct (str_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
+        destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
         -- rewrite in_map_iff in pf.
            destruct pf as [s' [Hs'1 Hs'2]].
            inversion Hs'1; subst.
@@ -1245,11 +1245,11 @@ Proof.
       assert (forall m, {w : win White (exec_move s m) & depth w <= curr tb /\ minimal w}).
       { intro m'.
         specialize (Hforall m' (enum_all m')).
-        destruct (str_lookup (exec_move s m')
+        destruct (hash_lookup (exec_move s m')
           (add_positions (white_positions tb) White (curr tb)
           (last_white_positions tb))) as [[[|] n]|] eqn:Hsm; try congruence.
         clear Hforall.
-        destruct (str_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
+        destruct (hash_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
         + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
           pose (lwp_mate _ v G2) as sm.
           rewrite tb_step in sm; simpl in sm.
@@ -1318,7 +1318,7 @@ Proof.
       destruct w'; simpl in *; try congruence.
       apply le_n_S.
       rewrite w_d.
-      destruct (str_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
+      destruct (hash_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
       pose (w'' := eloise_win s_res s_play m0 w').
       epose proof (tb_None _ v w'') as Hw'.
       unfold tb_lookup in Hw'.
@@ -1648,7 +1648,7 @@ Proof.
   destruct (good_to_list _ (white_good _ X0)) as [ws Hws].
   destruct (good_to_list _ (black_good _ X0)) as [bs Hbs].
   unfold add_positions.
-  repeat rewrite str_size_adds; try
+  repeat rewrite hash_size_adds; try
   (rewrite map_map;
     unfold tag;
     simpl;
@@ -1843,23 +1843,23 @@ Proof.
       apply enum_states_correct.
     }
     destruct (to_play s) eqn:s_play.
-    + assert (In (s, (Black, 0)) (map (tag Black 0) (nodup Show_dec (enum_wins Black)))) as Hs.
+    + assert (In (s, (Black, 0)) (map (tag Black 0) (nodup IntHash_dec (enum_wins Black)))) as Hs.
       { rewrite in_map_iff.
         exists s; split; [reflexivity|].
         rewrite nodup_In.
         erewrite atomic_win_opp in s_play; [|exact s_res].
         apply enum_wins_correct2; now destruct pl.
       }
-      pose proof (str_adds_ne_pos (map (tag Black 0) (nodup Show_dec (enum_wins Black)))
+      pose proof (hash_adds_ne_pos (map (tag Black 0) (nodup IntHash_dec (enum_wins Black)))
         s (Black, 0) Hs); lia.
-    + assert (In (s, (White, 0)) (map (tag White 0) (nodup Show_dec (enum_wins White)))) as Hs.
+    + assert (In (s, (White, 0)) (map (tag White 0) (nodup IntHash_dec (enum_wins White)))) as Hs.
       { rewrite in_map_iff.
         exists s; split; [reflexivity|].
         rewrite nodup_In.
         erewrite atomic_win_opp in s_play; [|exact s_res].
         apply enum_wins_correct2; now destruct pl.
       }
-      pose proof (str_adds_ne_pos (map (tag White 0) (nodup Show_dec (enum_wins White)))
+      pose proof (hash_adds_ne_pos (map (tag White 0) (nodup IntHash_dec (enum_wins White)))
         s (White, 0) Hs); lia.
   - intros s pl s_res.
     apply mate_TB_final_lookup.

@@ -5,15 +5,15 @@ Require Import Compare_dec.
 Require Import Games.Game.Game.
 Require Import Games.Game.TB.
 Require Import Games.Util.OMap.
-Require Import Games.Util.Show.
+Require Import Games.Util.IntHash.
 Require Import Games.Game.Player.
-Require Import Games.Util.StringMap.
+Require Import Games.Util.IntMap.
 Require Import Games.Game.Strategy.
 Require Import Games.Game.Win.
 Require Import Games.Game.Draw.
 Require Import Games.Util.Dec.
 
-Record OCamlTablebase (G : Game) `{Show (GameState G)} : Type := {
+Record OCamlTablebase (G : Game) `{IntHash (GameState G)} : Type := {
   tb_whites : OM (Player * nat)%type;
   tb_blacks : OM (Player * nat)%type
   }.
@@ -21,15 +21,15 @@ Record OCamlTablebase (G : Game) `{Show (GameState G)} : Type := {
 Arguments tb_whites {_} {_} _.
 Arguments tb_blacks {_} {_} _.
 
-Definition query_TB {G} `{Show (GameState G)}
+Definition query_TB {G} `{IntHash (GameState G)}
   (tb : OCamlTablebase G) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => str_lookup s (tb_whites tb)
-  | Black => str_lookup s (tb_blacks tb)
+  | White => hash_lookup s (tb_whites tb)
+  | Black => hash_lookup s (tb_blacks tb)
   end.
 
-Record CorrectTablebase {M} `{StringMap M}
-  {G} `{Show (GameState G)} (tb : OCamlTablebase G) := {
+Record CorrectTablebase {M} `{IntMap M}
+  {G} `{IntHash (GameState G)} (tb : OCamlTablebase G) := {
 
   query_mate : forall s pl n,
     query_TB tb s = Some (pl, n) ->
@@ -52,8 +52,8 @@ Record CorrectTablebase {M} `{StringMap M}
 Arguments query_mate {_} {_} {_} {_}.
 Arguments query_draw {_} {_} {_} {_}.
 
-Definition certified_TB {M} `{StringMap M}
-  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+Definition certified_TB {M} `{IntMap M}
+  {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   OCamlTablebase G :=
   match TB_final with
@@ -64,8 +64,8 @@ Definition certified_TB {M} `{StringMap M}
     |}
   end.
 
-Lemma certified_TB_whites {M} `{StringMap M}
-  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+Lemma certified_TB_whites {M} `{IntMap M}
+  {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   tb_whites certified_TB = white_positions TB_final.
 Proof.
@@ -73,8 +73,8 @@ Proof.
   destruct TB_final; reflexivity.
 Qed.
 
-Lemma certified_TB_blacks {M} `{StringMap M}
-  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+Lemma certified_TB_blacks {M} `{IntMap M}
+  {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   tb_blacks certified_TB = black_positions TB_final.
 Proof.
@@ -82,8 +82,8 @@ Proof.
   destruct TB_final; reflexivity.
 Qed.
 
-Lemma certified_TB_correct {M} `{StringMap M}
-  {G} `{Show (GameState G)} `{FinGame G} `{Reversible G}
+Lemma certified_TB_correct {M} `{IntMap M}
+  {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
   `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
   CorrectTablebase certified_TB.
 Proof.
@@ -152,8 +152,8 @@ Proof.
 Qed.
 
 CoFixpoint tb_strat {M} {G} (s : GameState G) pl
-  `{StringMap M}
-  `{Show (GameState G)}
+  `{IntMap M}
+  `{IntHash (GameState G)}
   (tb : OCamlTablebase G) : strategy pl s.
 Proof.
   - destruct (atomic_res s) eqn:s_res.

@@ -10,10 +10,10 @@ Require Import Games.Bear.Graph.
 Require Import Games.Bear.Sort.
 Require Import Games.Game.TB.
 Require Import Games.Game.Player.
-Require Import Games.Util.Show.
+Require Import Games.Util.IntHash.
 Require Import Games.Util.Dec.
 Require Import Games.Util.AssocList.
-Require Import Games.Util.StringMap.
+Require Import Games.Util.IntMap.
 
 Definition NoDup_dec {X} `{Discrete X} (xs : list X) :
   { NoDup xs } + { ~ NoDup xs }.
@@ -517,39 +517,6 @@ Qed.
 Definition strLP : string := "(".
 Definition strComma : string := ",".
 Definition strRP : string := ")".
-
-Global Instance BearGameStateShow {G} `{sh : Show (Vert G)}
-  `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh} : Show (GameState (BearGame G)).
-Proof.
-  simpl.
-  refine {|
-    show := fun s => strLP ++ show (to_play s) ++ strComma ++ show (bear s) ++ strComma ++ show (hunters s) ++ strRP;
-    show_inj := _
-  |}.
-  intros s s' pf.
-  assert (to_play s = to_play s') as pf1.
-  { destruct (to_play s), (to_play s');
-      (discriminate || reflexivity).
-  }
-  assert (bear s = bear s') as pf2.
-  { destruct pf1.
-    pose proof (app_l_cancel ("(" ++ show (to_play s)) _ _ pf)
-      as pf'; clear pf.
-    pose proof (app_l_cancel "," _ _ pf') as pf.
-    apply show_inj.
-    apply (char_free_split pf); apply comma_free.
-  }
-  assert (hunters s = hunters s').
-  { destruct pf1, pf2.
-    pose proof (app_l_cancel ("(" ++ show (to_play s)) _ _ pf)
-      as pf'; clear pf.
-    pose proof (app_l_cancel ("," ++ show (bear s)) _ _ pf') as pf; clear pf'.
-    pose proof (app_l_cancel "," _ _ pf) as pf'; clear pf.
-    apply show_inj.
-    exact (string_app_lemma _ _ ")" pf').
-  }
-  now apply BG_State_ext.
-Defined.
 
 Lemma NoDup_sublists {X} : forall (xs : list X) n,
   NoDup xs -> forall ys, In ys (sublists n xs) -> NoDup ys.
@@ -1107,6 +1074,5 @@ Defined.
 Require Import Games.Util.OMap.
 Require Import Games.Game.OCamlTB.
 
-Definition Bear_TB (G : Graph) `{sh : Show (Vert G)}
-  `{@CommaFree _ sh, @Nonnil _ sh, @SemicolonFree _ sh}
+Definition Bear_TB (G : Graph) `{hsh : IntHash (GameState (BearGame G))}
   : OCamlTablebase (BearGame G) := certified_TB.

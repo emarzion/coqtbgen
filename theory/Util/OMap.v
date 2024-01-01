@@ -1,11 +1,11 @@
-Require Import String.
-Require Games.Util.StringMap.
+Require Import PrimInt63.
+Require Games.Util.IntMap.
 
 Parameter OM : Type -> Type.
 
 Parameter empty : forall {X}, OM X.
-Parameter add : forall {X}, string -> X -> OM X -> OM X.
-Parameter lookup : forall {X}, string -> OM X -> option X.
+Parameter add : forall {X}, int -> X -> OM X -> OM X.
+Parameter lookup : forall {X}, int -> OM X -> option X.
 Parameter size : forall {X}, OM X -> nat.
 
 Axiom lookup_empty : forall {X} str,
@@ -22,16 +22,16 @@ Axiom size_add : forall {X} str (x : X) m,
     | None => S (size m)
     end.
 
-Global Instance OMap : StringMap.StringMap OM := {|
-  StringMap.empty := @empty;
-  StringMap.add := @add;
-  StringMap.lookup := @lookup;
-  StringMap.size := @size;
-  StringMap.lookup_empty := @lookup_empty;
-  StringMap.lookup_add := @lookup_add;
-  StringMap.lookup_add_neq := @lookup_add_neq;
-  StringMap.size_empty := @size_empty;
-  StringMap.size_add := @size_add
+Global Instance OMap : IntMap.IntMap OM := {|
+  IntMap.empty := @empty;
+  IntMap.add := @add;
+  IntMap.lookup := @lookup;
+  IntMap.size := @size;
+  IntMap.lookup_empty := @lookup_empty;
+  IntMap.lookup_add := @lookup_add;
+  IntMap.lookup_add_neq := @lookup_add_neq;
+  IntMap.size_empty := @size_empty;
+  IntMap.size_add := @size_add
   |}.
 
 Require Import Extraction.

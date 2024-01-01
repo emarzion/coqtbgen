@@ -1,6 +1,7 @@
 Require Import List.
 Import ListNotations.
-Require Import String.
+Require Import PrimInt63.
+Require Import Uint63.
 
 Require Import Games.Game.Player.
 Require Import Games.Game.Game.
@@ -8,8 +9,11 @@ Require Import Games.Game.Draw.
 Require Import Games.Game.Win.
 Require Import Games.Game.TB.
 Require Import Games.Util.AssocList.
-Require Import Games.Util.Show.
+Require Import Games.Util.IntHash.
 Require Import Games.Util.Dec.
+
+Require Import Games.Util.OMap.
+Require Import Games.Game.OCamlTB.
 
 Inductive Pos :=
   A | B | C | D | E | F.
@@ -381,42 +385,30 @@ Proof.
   - intros [[] []] []; simpl; tauto.
 Defined.
 
-Global Instance CF_Player : CommaFree Player.
+Definition hash_St (st : St) : int :=
+  match st with
+  | (White,A) => 0
+  | (White,B) => 1
+  | (White,C) => 2
+  | (White,D) => 3
+  | (White,E) => 4
+  | (White,F) => 5
+  | (Black,A) => 6
+  | (Black,B) => 7
+  | (Black,C) => 8
+  | (Black,D) => 9
+  | (Black,E) => 10
+  | (Black,F) => 11
+  end.
+
+Global Instance foo : IntHash St. refine {|
+  hash := hash_St;
+  hash_inj := _;
+  |}.
 Proof.
-  constructor.
-  intros [];
-  simpl; repeat split; discriminate.
+  intros [[][]] [[][]]; simpl; intro pf; try reflexivity;
+  discriminate ((f_equal to_Z pf)).
 Defined.
-
-Definition show_pos : Pos -> string :=
-  fun p =>
-    match p with
-    | A => "A"
-    | B => "B"
-    | C => "C"
-    | D => "D"
-    | E => "E"
-    | F => "F"
-    end.
-
-Global Instance Show_Pos : Show Pos.
-Proof.
-  refine ( {|
-    show := show_pos;
-    show_inj := _
-  |} ).
-  intros [] [] pf; (reflexivity || discriminate).
-Defined.
-
-Global Instance CF_Pos : CommaFree Pos.
-Proof.
-  constructor.
-  intros [];
-  simpl; repeat split; discriminate.
-Defined.
-
-Require Import Games.Util.OMap.
-Require Import Games.Game.OCamlTB.
 
 Definition TB_Sample : OCamlTablebase SampleGame :=
   certified_TB.
