@@ -42,5 +42,3 @@ Extract Constant add => "M.insert".
 Extract Constant lookup => "M.lookup".
 Extract Constant size => "M.size".
 Extract Constant OM "'v" => "'v M.t".
-
-
