@@ -10,11 +10,10 @@ Require Import Games.Game.Draw.
 Require Import Games.Game.Win.
 Require Import Games.Game.Strategy.
 
-(*Require Import Games.Util.TBLoop.*)
 Require Import Games.Util.IntMap.
 Require Import Games.Util.IntHash.
 Require Import Games.Util.Dec.
-Require Import Games.Util.NewLoop.
+Require Import Games.Util.Loop.
 
 Global Instance List_disc {X} `{Discrete X} : Discrete (list X).
 Proof.

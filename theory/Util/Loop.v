@@ -1,7 +1,6 @@
 Require Import Lia.
 Require Import Compare_dec.
 
-
 Lemma iter_lemma {X} (f : X -> X) (k : nat) (x : X) :
   Nat.iter k f (f x) = f (Nat.iter k f x).
 Proof.
@@ -23,14 +22,14 @@ Arguments step {_} _ _.
 Arguments step_measure {_} _ _.
 
 Fixpoint loop_aux {X} (l : loop_data X) (x : X)
-  (a : Acc (Wf_nat.ltof _ (measure l)) x) {struct a} : X.
-Proof.
-  destruct (le_lt_eq_dec _ _ (step_measure l x)).
-  - destruct a.
-    apply (loop_aux X l (step l x)).
-    apply H. exact l0.
-  - exact x.
-Defined.
+  (a : Acc (Wf_nat.ltof _ (measure l)) x) {struct a} : X :=
+  match le_lt_eq_dec _ _ (step_measure l x) with
+  | left pf =>
+    match a with
+    | Acc_intro _ accs => loop_aux l (step l x) (accs _ pf)
+    end
+  | right _ => x
+  end.
 
 Fixpoint loop_aux_ext {X} (l : loop_data X) (x : X)
   (a : Acc (Wf_nat.ltof _ (measure l)) x) {struct a} :
@@ -62,8 +61,6 @@ Proof.
       apply loop_aux_ext.
     + reflexivity.
 Defined.
-
-
 
 Lemma loop_measure_aux {X} (l : loop_data X) : forall n x, n = measure l x ->
   measure l (loop l x) = measure l (step l (loop l x)).

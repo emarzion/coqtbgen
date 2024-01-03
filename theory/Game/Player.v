@@ -1,4 +1,4 @@
-Require Import Games.Util.All.
+Require Import Games.Util.Dec.
 
 Inductive Player :=
   | White : Player
