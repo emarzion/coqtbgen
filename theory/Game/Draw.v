@@ -37,10 +37,12 @@ Proof.
   - exact (atom_strategy e).
   - destruct (player_id_or_opp_r_t (to_play s) p).
     + eapply eloise_strategy.
+      * exact e0.
       * exact e1.
       * eapply strategy_of_draw.
         exact d.
     + eapply (abelard_strategy).
+      * exact e0.
       * exact e1.
       * intro m'.
         destruct (s0 m').
