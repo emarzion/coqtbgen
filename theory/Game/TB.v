@@ -680,7 +680,7 @@ Proof.
   (* mate_tb *)
   - simpl; intros s pl n n_small sm.
     destruct (le_lt_eq_dec _ _ n_small) as [pf|pf].
-    + pose proof (Arith_prebase.lt_S_n _ _ pf) as pf'.
+    + pose proof (PeanoNat.lt_S_n _ _ pf) as pf'.
       pose proof (mate_tb _ v pf' sm) as Htb.
       unfold tb_lookup in *.
       destruct (to_play s) eqn:s_play.
