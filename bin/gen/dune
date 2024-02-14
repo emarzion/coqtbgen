@@ -16,7 +16,7 @@
 
 (env
   (dev
-    (flags (:standard -w -39 -w -33))
+    (flags (:standard -w -39 -w -33 -w -20))
     (ocamlopt_flags (:standard -O3)))
   (release
     (ocamlopt_flags (:standard -O3))))

@@ -70,10 +70,10 @@ Fixpoint strategy_of_win {G : Game} {p : Player} {s : GameState G}
   match w with
   | atom_win res_pf =>
       atom_strategy res_pf
-  | eloise_win _ play_pf m w =>
-      eloise_strategy play_pf m (strategy_of_win w)
-  | abelard_win _ play_pf ws =>
-      abelard_strategy play_pf (fun m =>
+  | eloise_win res_pf play_pf m w =>
+      eloise_strategy res_pf play_pf m (strategy_of_win w)
+  | abelard_win res_pf play_pf ws =>
+      abelard_strategy res_pf play_pf (fun m =>
         strategy_of_win (ws m))
   end.
 

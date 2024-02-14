@@ -164,73 +164,7 @@ Proof.
              (query_TB tb (exec_move s m1))
              (query_TB tb (exec_move s m2))
           ) (enum_moves s) (move_enum_all_ne s_res)).
-        exact (eloise_strategy s_play m (@tb_strat _ _ _ pl _ _ tb)).
-      * exact (abelard_strategy s_play (fun m =>
+        exact (eloise_strategy s_res s_play m (@tb_strat _ _ _ pl _ _ tb)).
+      * exact (abelard_strategy s_res s_play (fun m =>
           @tb_strat _ _ _ pl _ _ tb)).
 Defined.
-
-(*
-CoInductive Res :=
-  | Win_res (pl : Player) : Res
-  | Step_res : Res -> Res.
-
-CoInductive bisim : Res -> Res -> Prop :=
-  | Win_refl {pl} : bisim (Win_res pl) (Win_res pl)
-  | Step_bisim {r1 r2} : bisim r1 r2 -> bisim (Step_res r1) (Step_res r2).
-
-CoFixpoint draw : Res := Step_res draw.
-
-CoInductive pref (pl : Player) : Res -> Res -> Prop :=
-  | Win_is_best : forall r, pref pl (Win_res pl) r
-  | Loss_is_worst : forall r, pref pl r (Win_res (opp pl))
-  | Step_mon : forall r1 r2, pref pl r1 r2 -> pref pl (Step_res r1) (Step_res r2).
-
-CoFixpoint pref_antisym pl : forall r1 r2, pref pl r1 r2 -> pref pl r2 r1 ->
-  bisim r1 r2.
-Proof.
-  intros.
-  destruct H.
-  - inversion H0.
-    + apply Win_refl.
-    + elim (opp_no_fp pl); congruence.
-  - inversion H0.
-    + elim (opp_no_fp pl); congruence.
-    + apply Win_refl.
-  - inversion H0.
-    apply Step_bisim.
-    apply (pref_antisym _ _ _ H H3).
-Qed.
-
-CoFixpoint trace {G} {pl} (s : GameState G)
-  (s1 : strategy pl s) (s2 : strategy (opp pl) s) : Res.
-Proof.
-  destruct (atomic_res s) eqn:s_res.
-  - destruct r.
-    + exact (Win_res p).
-    + exact draw.
-  - destruct (player_id_or_opp_r_t (to_play s) pl).
-    + destruct s1.
-      * congruence.
-      * destruct s2.
-        -- congruence.
-        -- elim (opp_no_fp pl); congruence.
-        -- apply Step_res.
-           exact (trace _ _ (exec_move b m) s1 (s m)).
-      * elim (opp_no_fp pl); congruence.
-    + destruct s1.
-      * congruence.
-      * elim (opp_no_fp pl); congruence.
-      * destruct s2.
-        -- congruence.
-        -- apply Step_res.
-           exact (trace _ _ (exec_move b m) (s m) s2).
-        -- elim (opp_no_fp (opp pl)); congruence.
-Defined.
-
-Definition optimal {G} {pl} {s : GameState G} (str : strategy pl s) : Prop :=
-  forall str', exists opp, pref pl (trace s str opp) (trace s str' opp).
-
-
-*)
-
-
