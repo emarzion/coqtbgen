@@ -151,12 +151,14 @@ Proof.
   destruct (nil_atomic_res pf); congruence.
 Qed.
 
+Require Import Games.Game.Result.
+
 CoFixpoint tb_strat {M} {G} (s : GameState G) pl
   `{IntMap M}
   `{IntHash (GameState G)}
   (tb : OCamlTablebase G) : strategy pl s.
 Proof.
-  - destruct (atomic_res s) eqn:s_res.
+  - destruct (atomic_res_inf s) as [[r s_res]|s_res].
     + eapply atom_strategy; eauto.
     + destruct (player_id_or_opp_r_t (to_play s) pl) as [s_play|s_play].
       * pose (m := max_by_ne
@@ -168,3 +170,172 @@ Proof.
       * exact (abelard_strategy s_res s_play (fun m =>
           @tb_strat _ _ _ pl _ _ tb)).
 Defined.
+
+Axiom cheat : forall {X}, X.
+
+CoFixpoint res_le_refl pl : forall r,
+  r <<= pl r.
+Proof.
+  destruct r.
+  - destruct (player_id_or_opp pl pl0).
+    + destruct H.
+      apply Win_is_best.
+    + rewrite <- H.
+      apply Loss_is_worst.
+  - apply Step_mon.
+    apply res_le_refl.
+Qed.
+
+Require Import Lia.
+
+Lemma mate_0_atom {G} : forall p (s : GameState G),
+  mate p s 0 -> atomic_res s = Some (Win p).
+Proof.
+  intros p s [w [w_d _]].
+  destruct w; auto.
+  - discriminate w_d.
+  - discriminate w_d.
+Qed.
+
+Lemma atom_mate_0 {G} : forall p (s : GameState G),
+  atomic_res s = Some (Win p) -> mate p s 0.
+Proof.
+  intros p s pf.
+  exists (atom_win pf).
+  split; [reflexivity|intro; simpl; lia].
+Qed.
+
+Lemma atomic_res_None_invert {M} {G} {s : GameState G}
+  `{IntMap M} `{IntHash (GameState G)} (tb : OCamlTablebase G) :
+  CorrectTablebase tb ->
+  atomic_res s = None ->
+  (query_TB tb s = None) +
+  { pl : Player & { n : nat & query_TB tb s = Some (pl, S n) } }.
+Proof.
+  intros C s_res.
+  destruct (query_TB tb s) as [[pl n]|] eqn:Q.
+  - right; exists pl.
+    destruct n as [|n].
+    + rewrite (mate_0_atom pl s) in s_res; [discriminate|].
+      now apply C.
+    + now exists n.
+  - now left.
+Defined.
+
+CoFixpoint tb_strat_bound {M} {G} {s : GameState G} {pl}
+  `{IntMap M} `{IntHash (GameState G)} (tb : OCamlTablebase G)
+  (C : CorrectTablebase tb) :
+  forall opp,
+  (Res_of_tb_res (query_TB tb s)) <<= pl
+  (trace (tb_strat s pl tb) opp).
+Proof.
+  intros opp.
+  rewrite (Res_id_eq (trace _ _)).
+  unfold Res_id.
+  unfold trace.
+  unfold tb_strat.
+  destruct (atomic_res_inf s) as [[r s_res]|s_res].
+  - destruct r.
+    + simpl.
+      rewrite (mate_query _ C _ _ _ (atom_mate_0 _ _ s_res)).
+      simpl.
+      apply res_le_refl.
+    + rewrite (draw_query _ C _ (atom_draw _ s_res)).
+      simpl.
+      rewrite (Res_id_eq draw) at 1.
+      apply res_le_refl.
+  - destruct player_id_or_opp_r_t.
+    + destruct opp; try (elim (opp_no_fp pl); congruence).
+      fold @trace.
+      fold @tb_strat.
+      destruct (atomic_res_None_invert tb C s_res) as [Qnone|[pl' [n Qn]]].
+      * apply cheat. (**)
+      * apply cheat. (**)
+    + destruct opp; try (elim (opp_no_fp (opp pl)); congruence).
+      fold @trace.
+      fold @tb_strat.
+      destruct (atomic_res_None_invert tb C s_res) as [Qnone|[pl' [n Qn]]].
+      * apply cheat. (**)
+      * rewrite Qn.
+        simpl.
+        apply (res_le_trans _ _ (Step_res
+          (Res_of_tb_res (query_TB tb (exec_move b m))))).
+        -- apply cheat.
+        -- exact (Step_mon _ _ _ (
+tb_strat_bound M G _ pl H H0 tb C
+  opp)).
+Defined.
+
+CoFixpoint tb_strat_bound {M} {G} {s : GameState G} {pl}
+  `{IntMap M} `{IntHash (GameState G)} (tb : OCamlTablebase G)
+  (C : CorrectTablebase tb) :
+  forall opp,
+  (Res_of_tb_res (query_TB tb s)) <<= pl
+  (trace (tb_strat s pl tb) opp).
+Proof.
+  intros opp.
+  rewrite (Res_id_eq (trace _ _)).
+  unfold Res_id.
+  unfold trace.
+  unfold tb_strat.
+  destruct (atomic_res_inf s) as [[r s_res]|s_res].
+  - destruct r.
+    + simpl.
+      rewrite (mate_query _ C _ _ _ (atom_mate_0 _ _ s_res)).
+      simpl.
+      apply res_le_refl.
+    + rewrite (draw_query _ C _ (atom_draw _ s_res)).
+      simpl.
+      rewrite (Res_id_eq draw) at 1.
+      apply res_le_refl.
+  - destruct player_id_or_opp_r_t.
+    + destruct opp; try (elim (opp_no_fp pl); congruence).
+      fold @trace.
+      fold @tb_strat.
+      destruct (atomic_res_None_invert tb C s_res) as [Qnone|[pl' [n Qn]]].
+      * apply cheat. (**)
+      * apply cheat. (**)
+    + destruct opp; try (elim (opp_no_fp (opp pl)); congruence).
+      fold @trace.
+      fold @tb_strat.
+      destruct (atomic_res_None_invert tb C s_res) as [Qnone|[pl' [n Qn]]].
+      * apply cheat. (**)
+      * rewrite Qn.
+        simpl.
+        apply (res_le_trans _ _ (Step_res
+          (Res_of_tb_res (query_TB tb (exec_move b m))))).
+        -- apply cheat.
+        -- apply Step_mon.
+           apply tb_strat_bound.
+            exact C.
+Defined.
+
+CoFixpoint le_cong_r pl : forall r s s', bisim s s' ->
+  r <<= pl s' -> r <<= pl s.
+Proof.
+  intros r s s' Hsim Hle.
+  destruct Hsim.
+  - exact Hle.
+  - inversion Hle.
+    + apply Loss_is_worst.
+    + apply Step_mon.
+      eapply le_cong_r; eauto.
+Qed.
+
+Lemma tb_strat_optimal {M} {G} {s : GameState G} {pl}
+  `{IntMap M} `{IntHash (GameState G)} (tb : OCamlTablebase G) :
+  CorrectTablebase tb ->
+  optimal (tb_strat s pl tb).
+Proof.
+  intros C st.
+  exists (tb_strat s (opp pl) tb).
+  apply (res_le_trans _ _ (Res_of_tb_res (query_TB tb s))).
+  - rewrite <- (opp_invol pl) at 1.
+    apply res_flip.
+    eapply le_cong_r; [apply trace_comm|].
+    now apply tb_strat_bound.
+  - now apply tb_strat_bound.
+Qed.
+
+
+
