@@ -10,9 +10,9 @@ Require Import ExtrOCamlInt63.
 Extraction Language OCaml.
 
 Require Import Games.Util.OMap.
-Require Import Games.Bear.Sort.
-Require Import Games.Bear.BearGame.
-Require Import Games.Bear.RomanWheel.
+Require Import TBGen.Bear.Sort.
+Require Import TBGen.Bear.BearGame.
+Require Import TBGen.Bear.RomanWheel.
 Require Import Games.Game.TB.
 
 Extraction "TBGen.ml" RW_TB.
