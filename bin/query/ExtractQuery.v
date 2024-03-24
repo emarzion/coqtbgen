@@ -13,9 +13,9 @@ Extraction Language OCaml.
 Require Import Games.Util.Show.
 Require Import Games.Util.IntHash.
 Require Import Games.Util.OMap.
-Require Import Games.Bear.Sort.
-Require Import Games.Bear.BearGame.
-Require Import Games.Bear.RomanWheel.
+Require Import TBGen.Bear.Sort.
+Require Import TBGen.Bear.BearGame.
+Require Import TBGen.Bear.RomanWheel.
 Require Import Games.Game.TB.
 Require Import Games.Game.OCamlTB.
 
@@ -163,6 +163,8 @@ Definition rw_tb_strat (pl : Player.Player)
   (tb : OCamlTablebase (BearGame RomanWheel))
  : Strategy.strategy pl s :=
   tb_strat s pl tb.
+
+Set Warnings "-extraction-default-directory".
 
 Separate Extraction
   make_RW_State

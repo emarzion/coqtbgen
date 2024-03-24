@@ -24,7 +24,7 @@
     String0
     TB
   )
-  (theories Games))
+  (theories Games TBGen))
 
 (library
   (name query)

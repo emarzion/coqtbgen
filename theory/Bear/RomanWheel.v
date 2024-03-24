@@ -7,8 +7,8 @@ Require Import ZArith.
 Require Import Lia.
 
 Require Import Games.Util.IntHash.
-Require Import Games.Bear.Graph.
-Require Import Games.Bear.BearGame.
+Require Import TBGen.Bear.Graph.
+Require Import TBGen.Bear.BearGame.
 Require Import Games.Game.TB.
 
 Inductive Spoke :=

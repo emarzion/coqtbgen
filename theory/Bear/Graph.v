@@ -1,8 +1,7 @@
-
 Require Import Lia.
 Require Import List.
 Import ListNotations.
-Require Import Games.Bear.Sort.
+Require Import TBGen.Bear.Sort.
 
 Require Import Games.Util.Dec.
 

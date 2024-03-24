@@ -1,7 +1,7 @@
 (coq.extraction
   (prelude ExtractRomanWheel)
   (extracted_modules TBGen)
-  (theories Games))
+  (theories Games TBGen))
 
 (library
   (name extracted_code)

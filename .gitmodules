@@ -1,0 +1,3 @@
+[submodule "ext/games"]
+	path = ext/games
+	url = git@github.com:emarzion/games.git

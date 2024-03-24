@@ -4,10 +4,11 @@ Require Import String.
 Open Scope string_scope.
 
 Require Coq.Sorting.Sorting.
+Require Import Games.Game.Game.
 
 Require Import Games.Game.Game.
-Require Import Games.Bear.Graph.
-Require Import Games.Bear.Sort.
+Require Import TBGen.Bear.Graph.
+Require Import TBGen.Bear.Sort.
 Require Import Games.Game.TB.
 Require Import Games.Game.Player.
 Require Import Games.Util.IntHash.
