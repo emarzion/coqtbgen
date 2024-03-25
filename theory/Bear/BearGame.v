@@ -9,12 +9,14 @@ Require Import Games.Game.Game.
 Require Import Games.Game.Game.
 Require Import TBGen.Bear.Graph.
 Require Import TBGen.Bear.Sort.
-Require Import Games.Game.TB.
+Require Import TBGen.TB.TB.
 Require Import Games.Game.Player.
-Require Import Games.Util.IntHash.
+Require Import TBGen.Util.IntHash.
 Require Import Games.Util.Dec.
-Require Import Games.Util.AssocList.
-Require Import Games.Util.IntMap.
+Require Import TBGen.Util.AssocList.
+Require Import TBGen.Util.IntMap.
+Require Import TBGen.Util.OMap.
+Require Import TBGen.TB.OCamlTB.
 
 Definition NoDup_dec {X} `{Discrete X} (xs : list X) :
   { NoDup xs } + { ~ NoDup xs }.
@@ -1071,9 +1073,6 @@ Proof.
       inversion H.
       congruence.
 Defined.
-
-Require Import Games.Util.OMap.
-Require Import Games.Game.OCamlTB.
 
 Definition Bear_TB (G : Graph) `{hsh : IntHash (GameState (BearGame G))}
   : OCamlTablebase (BearGame G) := certified_TB.

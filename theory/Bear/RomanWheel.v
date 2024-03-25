@@ -6,10 +6,10 @@ Require Import Uint63.
 Require Import ZArith.
 Require Import Lia.
 
-Require Import Games.Util.IntHash.
+Require Import TBGen.Util.IntHash.
 Require Import TBGen.Bear.Graph.
 Require Import TBGen.Bear.BearGame.
-Require Import Games.Game.TB.
+Require Import TBGen.TB.TB.
 
 Inductive Spoke :=
   S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8.

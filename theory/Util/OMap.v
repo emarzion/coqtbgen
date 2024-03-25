@@ -1,5 +1,5 @@
 Require Import PrimInt63.
-Require Games.Util.IntMap.
+Require TBGen.Util.IntMap.
 
 Parameter OM : Type -> Type.
 
