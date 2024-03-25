@@ -1,71 +1,70 @@
 Require Import Lia.
 Require Import List.
 Import ListNotations.
-Require Import PrimInt63.
-Require Import Uint63.
+Require Import String.
 
 Require Import Games.Util.Dec.
-Require Import TBGen.Util.IntHash.
+Require Import TBGen.Util.Show.
 Require TBGen.Util.AssocList.
 
 Module AL := AssocList.
 
-Class IntMap (M : Type -> Type) : Type := {
+Class StringMap (M : Type -> Type) : Type := {
   empty {X} : M X;
-  add {X} : int -> X -> M X -> M X;
-  lookup {X} : int -> M X -> option X;
+  add {X} : string -> X -> M X -> M X;
+  lookup {X} : string -> M X -> option X;
   size {X} : M X -> nat;
 
-  lookup_empty {X} : forall k, lookup k (empty : M X) = None;
-  lookup_add {X} : forall k (x : X) m, lookup k (add k x m) = Some x;
-  lookup_add_neq {X} : forall k k' (x : X) m, k <> k' ->
-    lookup k (add k' x m) = lookup k m;
+  lookup_empty {X} : forall str, lookup str (empty : M X) = None;
+  lookup_add {X} : forall str (x : X) m, lookup str (add str x m) = Some x;
+  lookup_add_neq {X} : forall str str' (x : X) m, str <> str' ->
+    lookup str (add str' x m) = lookup str m;
   size_empty {X} : size (empty : M X) = 0;
-  size_add {X} : forall k (x : X) m,
-    size (add k x m) =
-      match lookup k m with
+  size_add {X} : forall str (x : X) m,
+    size (add str x m) =
+      match lookup str m with
       | Some _ => size m
       | None => S (size m)
       end
   }.
 
-Definition hash_add {M} {X Y} `{IntMap M} `{IntHash X} :
+Definition str_add {M} {X Y} `{StringMap M} `{Show X} :
   X -> Y -> M Y -> M Y :=
-  fun x => add (hash x).
+  fun x => add (show x).
 
-Definition hash_lookup {M} {X Y} `{IntMap M} `{IntHash X} :
+Definition str_lookup {M} {X Y} `{StringMap M} `{Show X} :
   X -> M Y -> option Y :=
-  fun x => lookup (hash x).
+  fun x => lookup (show x).
 
-Lemma hash_lookup_empty {M} {X Y} `{IntMap M} `{IntHash X} :
-  forall x, hash_lookup x (empty : M Y) = None.
+Lemma str_lookup_empty {M} {X Y} `{StringMap M} `{Show X} :
+  forall x, str_lookup x (empty : M Y) = None.
 Proof.
   intro.
   apply lookup_empty.
 Qed.
 
-Lemma hash_lookup_add {M} {X Y} `{IntMap M} `{IntHash X} :
-  forall (x : X) (y : Y) m, hash_lookup x (hash_add x y m) = Some y.
+Lemma str_lookup_add {M} {X Y} `{StringMap M} `{Show X} :
+  forall (x : X) (y : Y) m, str_lookup x (str_add x y m) = Some y.
 Proof.
   intros.
   apply lookup_add.
 Qed.
 
-Lemma hash_lookup_add_neq {M} {X Y} `{IntMap M} `{IntHash X} :
+Lemma str_lookup_add_neq {M} {X Y} `{StringMap M} `{Show X} :
   forall (x x' : X) (y : Y) m, x <> x' ->
-    hash_lookup x (hash_add x' y m) = hash_lookup x m.
+    str_lookup x (str_add x' y m) = str_lookup x m.
 Proof.
   intros x x' y m Hxx'.
   apply lookup_add_neq.
-  intro Hhash.
+  intro Hshow.
   apply Hxx'.
-  now apply hash_inj.
+  now apply show_inj.
 Qed.
 
-Lemma hash_size_add {M} {X Y} `{IntMap M} `{IntHash X} :
+Lemma str_size_add {M} {X Y} `{StringMap M} `{Show X} :
   forall (x : X) (y : Y) m,
-    size (hash_add x y m) =
-      match hash_lookup x m with
+    size (str_add x y m) =
+      match str_lookup x m with
       | Some _ => size m
       | None => S (size m)
       end.
@@ -74,21 +73,21 @@ Proof.
   apply size_add.
 Qed.
 
-Fixpoint hash_adds {M} {X Y} `{IntMap M} `{IntHash X}
+Fixpoint str_adds {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) (m : M Y) {struct ps} : M Y :=
   match ps with
   | [] => m
-  | (x,y) :: qs => hash_adds qs (hash_add x y m)
+  | (x,y) :: qs => str_adds qs (str_add x y m)
   end.
 
-Inductive good {M} {X Y} `{IntMap M} `{IntHash X} : M Y -> Prop :=
+Inductive good {M} {X Y} `{StringMap M} `{Show X} : M Y -> Prop :=
   | good_e : good empty
-  | good_a {x y m} : good m -> hash_lookup x m = None -> good (hash_add x y m).
+  | good_a {x y m} : good m -> str_lookup x m = None -> good (str_add x y m).
 
-Fixpoint good_as {M} {X Y} `{IntMap M} `{IntHash X} {ps : list (X * Y)}
+Fixpoint good_as {M} {X Y} `{StringMap M} `{Show X} {ps : list (X * Y)}
   {m : M Y} (pf : good m) (nd : NoDup (map fst ps))
-  (disj : forall x y, In (x,y) ps -> hash_lookup x m = None) {struct ps}
-  : good (hash_adds ps m).
+  (disj : forall x y, In (x,y) ps -> str_lookup x m = None) {struct ps}
+  : good (str_adds ps m).
 Proof.
   induction ps as [|[x y] qs].
   - exact pf.
@@ -98,7 +97,7 @@ Proof.
       apply (disj x y); now left.
     + now inversion nd.
     + intros x' y' HIn.
-      rewrite hash_lookup_add_neq.
+      rewrite str_lookup_add_neq.
       * apply (disj x' y'); now right.
       * simpl in nd; inversion nd.
         intro Heq.
@@ -108,16 +107,16 @@ Proof.
         exists (x', y'); split; auto.
 Qed.
 
-Record map_list_equiv {M} {X Y} `{IntMap M} `{IntHash X}
+Record map_list_equiv {M} {X Y} `{Show X} `{StringMap M}
   (m : M Y) (ps : list (X * Y)) : Prop := {
   to_list_size : size m = List.length ps;
   keys_unique : NoDup (map fst ps);
-  lookup_in {x y} : hash_lookup x m = Some y <-> In (x,y) ps;
+  lookup_in {x y} : str_lookup x m = Some y <-> In (x,y) ps;
   }.
 
-Lemma hash_adds_add {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_adds_add {M} {X Y} `{StringMap M} `{Show X}
   {ps : list (X * Y)} : forall x y m,
-  hash_add x y (hash_adds ps m) = hash_adds (ps ++ [(x,y)]) m.
+  str_add x y (str_adds ps m) = str_adds (ps ++ [(x,y)]) m.
 Proof.
   induction ps; intros.
   - reflexivity. 
@@ -126,9 +125,9 @@ Proof.
     now rewrite IHps.
 Qed.
 
-Lemma hash_adds_app {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_adds_app {M} {X Y} `{StringMap M} `{Show X}
   {ps : list (X * Y)} : forall qs m,
-  hash_adds ps (hash_adds qs m) = hash_adds (qs ++ ps) m.
+  str_adds ps (str_adds qs m) = str_adds (qs ++ ps) m.
 Proof.
   induction ps; intros.
   - simpl; now rewrite app_nil_r.
@@ -138,72 +137,72 @@ Proof.
     { now rewrite <- app_assoc. }
     rewrite H1.
     rewrite <- IHps.
-    now rewrite hash_adds_add.
+    now rewrite str_adds_add.
 Qed.
 
-Lemma hash_size_add_le {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_size_add_le {M} {X Y} `{StringMap M} `{Show X}
   (x : X) (y : Y) : forall m : M Y,
-  size m <= size (hash_add x y m).
+  size m <= size (str_add x y m).
 Proof.
   intro.
-  rewrite hash_size_add.
-  destruct hash_lookup; lia.
+  rewrite str_size_add.
+  destruct str_lookup; lia.
 Qed.
 
-Lemma hash_size_add_lt {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_size_add_lt {M} {X Y} `{StringMap M} `{Show X}
   : forall (m : M Y) (x : X) (y : Y),
-  hash_lookup x m = None ->
-  size m < size (hash_add x y m).
+  str_lookup x m = None ->
+  size m < size (str_add x y m).
 Proof.
-  intros m x y Hlookup.
-  rewrite hash_size_add.
-  rewrite Hlookup.
+  intros.
+  rewrite str_size_add.
+  rewrite H1.
   lia.
 Qed.
 
-Lemma hash_size_adds_le {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_size_adds_le {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall m : M Y,
-  size m <= size (hash_adds ps m).
+  size m <= size (str_adds ps m).
 Proof.
   induction ps as [|[x y] qs].
   - intro; simpl. lia.
   - intros; simpl.
     simpl.
-    apply (PeanoNat.Nat.le_trans _ (size (hash_add x y m))).
-    + apply hash_size_add_le.
+    apply (PeanoNat.Nat.le_trans _ (size (str_add x y m))).
+    + apply str_size_add_le.
     + apply IHqs.
 Qed.
 
-Lemma hash_adds_ne_pos {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_adds_ne_pos {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall (x : X) (y : Y),
-  In (x,y) ps -> size (hash_adds ps empty) > 0.
+  In (x,y) ps -> size (str_adds ps empty) > 0.
 Proof.
   destruct ps as [|[x' y'] qs]; intros.
   - destruct H1.
   - simpl.
-    pose proof (hash_size_adds_le qs (hash_add x' y' empty)).
-    rewrite hash_size_add in H2.
-    rewrite hash_lookup_empty in H2.
+    pose proof (str_size_adds_le qs (str_add x' y' empty)).
+    rewrite str_size_add in H2.
+    rewrite str_lookup_empty in H2.
     lia.
 Qed.
 
-Lemma hash_size_adds {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_size_adds {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall m : M Y,
   NoDup (map fst ps) ->
-  (forall x, In x (map fst ps) -> hash_lookup x m = None) ->
-  size (hash_adds ps m) = List.length ps + size m.
+  (forall x, In x (map fst ps) -> str_lookup x m = None) ->
+  size (str_adds ps m) = List.length ps + size m.
 Proof.
   induction ps as [|[x y] qs]; intros m ndps Hpsm.
   - reflexivity.
   - simpl.
     rewrite IHqs.
-    + rewrite hash_size_add.
+    + rewrite str_size_add.
       rewrite Hpsm.
       * apply PeanoNat.Nat.add_succ_r.
       * left; reflexivity.
     + now inversion ndps.
     + intros.
-      rewrite hash_lookup_add_neq.
+      rewrite str_lookup_add_neq.
       * apply Hpsm.
         right; auto.
       * intro Hx0x.
@@ -211,41 +210,32 @@ Proof.
         now inversion ndps.
 Qed.
 
-Global Instance int_Discrete : Discrete int.
-Proof.
-  constructor.
-  intros x y.
-  destruct (eqb x y) eqn:Heq.
-  - left.
-    rewrite eqb_spec in Heq.
-    exact Heq.
-  - right.
-    rewrite eqb_false_spec in Heq.
-    exact Heq.
-Defined.
+Global Instance string_Discrete : Discrete string := {|
+  eq_dec := string_dec
+  |}.
 
-Lemma hash_lookup_adds_invert {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_lookup_adds_invert {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall (m : M Y) (x : X) (y : Y),
-  hash_lookup x (hash_adds ps m) = Some y ->
-  {In (x,y) ps} + {hash_lookup x m = Some y}.
+  str_lookup x (str_adds ps m) = Some y ->
+  {In (x,y) ps} + {str_lookup x m = Some y}.
 Proof.
   induction ps as [|[x y] qs]; intros m x' y' Hx'.
   - right. exact Hx'.
   - simpl in Hx'.
     destruct (IHqs _ _ _ Hx').
     + left; now right.
-    + destruct (eq_dec (hash x') (hash x)).
-      * assert (x' = x) as Hx'x by now apply hash_inj.
+    + destruct (eq_dec (show x') (show x)).
+      * assert (x' = x) as Hx'x by now apply show_inj.
         rewrite Hx'x in e.
-        rewrite hash_lookup_add in e.
+        rewrite str_lookup_add in e.
         left; left; congruence.
-      * rewrite hash_lookup_add_neq in e.
+      * rewrite str_lookup_add_neq in e.
         ** now right.
         ** intro Hx'x.
            now rewrite Hx'x in n.
 Defined.
 
-Lemma good_to_list {M} {X Y} `{IntHash X} `{IntMap M}
+Lemma good_to_list {M} {X Y} `{Show X} `{StringMap M}
   (m : M Y) (g : good m) : exists (ps : list (X * Y)), map_list_equiv m ps.
 Proof.
   induction g.
@@ -253,12 +243,12 @@ Proof.
     + now rewrite size_empty.
     + constructor.
     + intros x y.
-      unfold hash_lookup.
+      unfold str_lookup.
       now rewrite lookup_empty.
   - destruct IHg as [ps [tl_sz key_un l_in]].
     exists ((x,y) :: ps); constructor.
-    + unfold hash_add.
-      unfold hash_lookup in H1.
+    + unfold str_add.
+      unfold str_lookup in H1.
       rewrite size_add.
       rewrite H1.
       simpl; congruence.
@@ -270,28 +260,28 @@ Proof.
       rewrite Hx1 in Hx2.
       rewrite <- l_in in Hx2; congruence.
     + intros.
-      unfold hash_lookup, hash_add.
-      destruct (eq_dec (hash x0) (hash x)).
+      unfold str_lookup, str_add.
+      destruct (string_dec (show x0) (show x)).
       * rewrite e.
         rewrite lookup_add.
         split; intro.
-        -- pose (hash_inj _ _ e).
+        -- pose (show_inj _ _ e).
            left; congruence.
         -- destruct H2; [congruence|].
            rewrite <- l_in in H2.
-           pose (hash_inj _ _ e); congruence.
+           pose (show_inj _ _ e); congruence.
       * rewrite lookup_add_neq; auto.
-        unfold hash_lookup in l_in.
+        unfold str_lookup in l_in.
         rewrite l_in.
         split; intro; [now right|].
         destruct H2; [congruence|auto].
 Qed.
 
-Lemma hash_lookup_adds_None_invert {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_lookup_adds_None_invert {M} {X Y} `{StringMap M} `{Show X}
   {ps} : forall {m : M Y} {x : X},
-  hash_lookup x (hash_adds ps m) = None ->
+  str_lookup x (str_adds ps m) = None ->
   (~ In x (List.map fst ps)) /\
-  hash_lookup x m = None.
+  str_lookup x m = None.
 Proof.
   induction ps as [|[x y] qs]; intros m x' Hx'.
   - split.
@@ -302,26 +292,26 @@ Proof.
     split.
     + intros [|].
       * rewrite H3 in H2.
-        now rewrite hash_lookup_add in H2.
+        now rewrite str_lookup_add in H2.
       * contradiction.
-    + destruct (eq_dec (hash x') (hash x)).
-      * rewrite (hash_inj _ _ e) in H2.
-        now rewrite hash_lookup_add in H2.
-      * rewrite hash_lookup_add_neq in H2; auto.
+    + destruct (eq_dec (show x') (show x)).
+      * rewrite (show_inj _ _ e) in H2.
+        now rewrite str_lookup_add in H2.
+      * rewrite str_lookup_add_neq in H2; auto.
         congruence.
 Qed.
 
-Lemma hash_lookup_adds_nIn {M} {X Y} `{IntMap M} `{IntHash X} :
+Lemma str_lookup_adds_nIn {M} {X Y} `{StringMap M} `{Show X} :
   forall (ps : list (X * Y)) (x : X) m,
     ~ In x (List.map fst ps) ->
-    hash_lookup x (hash_adds ps m) = hash_lookup x m.
+    str_lookup x (str_adds ps m) = str_lookup x m.
 Proof.
   intro ps.
   induction ps as [|[x y] qs]; intros x' m nIn.
   - reflexivity.
   - simpl.
     rewrite IHqs.
-    + rewrite hash_lookup_add_neq.
+    + rewrite str_lookup_add_neq.
       * reflexivity.
       * intro Hxx'; apply nIn.
         left; symmetry; exact Hxx'.
@@ -347,20 +337,16 @@ Definition in_decb {X} `{Discrete X} (x : X) (xs : list X) :=
   | right _ => false
   end.
 
-Global Instance Hash_disc {X} `{IntHash X} : Discrete X.
+Global Instance Show_disc {X} `{Show X} : Discrete X.
 Proof.
   constructor.
-  intros x y.
-  destruct (eq_dec (hash x) (hash y)).
-  - left.
-    now apply hash_inj.
-  - right; congruence.
+  apply Show_dec.
 Defined.
 
-Lemma hash_lookup_adds {M} {X Y} `{IntMap M} `{IntHash X}
+Lemma str_lookup_adds {M} {X Y} `{StringMap M} `{Show X}
   (ps : list (X * Y)) : forall m : M Y, AL.functional ps ->
   forall (x : X) (y : Y), In (x,y) ps ->
-  hash_lookup x (hash_adds ps m) = Some y.
+  str_lookup x (str_adds ps m) = Some y.
 Proof.
   induction ps as [|[x y] qs]; intros m ndkeys x' y' HIn.
   - destruct HIn.
@@ -368,7 +354,7 @@ Proof.
     destruct HIn.
     + inversion H1; subst.
       destruct (in_dec x' (map fst qs)).
-      * apply (IHqs (hash_add x' y' m));
+      * apply (IHqs (str_add x' y' m));
           [exact (AL.functional_tail ndkeys)|].
         unfold AL.functional in ndkeys.
         rewrite in_map_iff in i.
@@ -377,13 +363,13 @@ Proof.
         rewrite (ndkeys x' y' v); auto.
         ** now left.
         ** now right.
-      * rewrite hash_lookup_adds_nIn; auto.
-        apply hash_lookup_add.
+      * rewrite str_lookup_adds_nIn; auto.
+        apply str_lookup_add.
     + apply IHqs; auto.
       exact (AL.functional_tail ndkeys).
 Qed.
 
-Global Instance AssocList_SM : IntMap (AL.t int) := {|
+Global Instance AssocList_SM : StringMap (AL.t string) := {|
   empty X := AL.empty;
   add X := AL.add;
   lookup X := AL.lookup;
