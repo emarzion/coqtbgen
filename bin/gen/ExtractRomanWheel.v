@@ -15,4 +15,6 @@ Require Import TBGen.Bear.BearGame.
 Require Import TBGen.Bear.RomanWheel.
 Require Import TBGen.TB.TB.
 
+Set Warnings "-extraction-default-directory".
+
 Extraction "TBGen.ml" RW_TB.
