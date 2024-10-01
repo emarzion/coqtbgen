@@ -349,7 +349,7 @@ Proof.
       rewrite Bool.orb_true_iff in Hv.
       destruct Hv as [Hv|Hv].
       * unfold in_decb in Hv.
-        destruct (in_dec v (hunters s)).
+        destruct (ListUtil.in_dec v (hunters s)).
         -- discriminate.
         -- contradiction.
       * unfold eqb in Hv.
@@ -369,7 +369,7 @@ Proof.
     + rewrite filter_In in HIn.
       destruct HIn as [_ HIn].
       unfold in_decb in HIn.
-      destruct (in_dec v (hunters s)).
+      destruct (ListUtil.in_dec v (hunters s)).
       * discriminate.
       * auto.
 Defined.

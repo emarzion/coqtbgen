@@ -6,6 +6,8 @@ Require Import Uint63.
 
 Require Import Games.Util.Dec.
 Require Import TBGen.Util.IntHash.
+Require Import TBGen.Util.ListUtil.
+
 Require TBGen.Util.AssocList.
 
 Module AL := AssocList.
@@ -211,6 +213,7 @@ Proof.
         now inversion ndps.
 Qed.
 
+(*TODO*)
 Global Instance int_Discrete : Discrete int.
 Proof.
   constructor.
@@ -329,24 +332,6 @@ Proof.
       right; auto.
 Qed.
 
-Lemma in_dec {X} `{Discrete X} (x : X) (xs : list X) :
-  { In x xs } + { ~ In x xs }.
-Proof.
-  induction xs as [|x' xs']; simpl.
-  - now right.
-  - destruct (eq_dec x' x).
-    + left; now left.
-    + destruct IHxs'.
-      * left; now right.
-      * right; intros [|]; contradiction.
-Defined.
-
-Definition in_decb {X} `{Discrete X} (x : X) (xs : list X) :=
-  match in_dec x xs with
-  | left _ => true
-  | right _ => false
-  end.
-
 Global Instance Hash_disc {X} `{IntHash X} : Discrete X.
 Proof.
   constructor.
@@ -358,7 +343,7 @@ Proof.
 Defined.
 
 Lemma hash_lookup_adds {M} {X Y} `{IntMap M} `{IntHash X}
-  (ps : list (X * Y)) : forall m : M Y, AL.functional ps ->
+  (ps : list (X * Y)) : forall m : M Y, functional ps ->
   forall (x : X) (y : Y), In (x,y) ps ->
   hash_lookup x (hash_adds ps m) = Some y.
 Proof.
@@ -367,10 +352,13 @@ Proof.
   - simpl in *.
     destruct HIn.
     + inversion H1; subst.
+
+
+
       destruct (in_dec x' (map fst qs)).
       * apply (IHqs (hash_add x' y' m));
-          [exact (AL.functional_tail ndkeys)|].
-        unfold AL.functional in ndkeys.
+          [exact (functional_tail ndkeys)|].
+        unfold functional in ndkeys.
         rewrite in_map_iff in i.
         destruct i as [[u v] [Heq HIn]].
         simpl in Heq; subst.
@@ -380,7 +368,7 @@ Proof.
       * rewrite hash_lookup_adds_nIn; auto.
         apply hash_lookup_add.
     + apply IHqs; auto.
-      exact (AL.functional_tail ndkeys).
+      exact (functional_tail ndkeys).
 Qed.
 
 Global Instance AssocList_SM : IntMap (AL.t int) := {|
