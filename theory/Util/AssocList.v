@@ -83,13 +83,3 @@ Proof.
     + reflexivity.
     + simpl; destruct (lookup k m'); auto.
 Qed.
-
-Definition functional {K V} (ps : list (K * V)) : Prop :=
-  forall x y y', In (x,y) ps -> In (x,y') ps -> y = y'.
-
-Lemma functional_tail {K V} {p : K * V} {qs} :
-  functional (p :: qs) -> functional qs.
-Proof.
-  intros Hfunc k v v' Hin Hin'.
-  eapply Hfunc; right; eauto.
-Qed.
