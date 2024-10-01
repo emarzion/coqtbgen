@@ -21,8 +21,13 @@ depends: [
   "js_of_ocaml-lwt" {>= "5.4.0"}
   "js_of_ocaml-ppx" {>= "5.4.0"}
   "js_of_ocaml-tyxml" {>= "5.4.0"}
+  "games"
 ]
 
 authors: [
   "Evan Marzion"
+]
+
+pin-depends: [
+  ["games.dev" "git+https://github.com/emarzion/games.git#ac3e97b03b7b2542d0523f5ce77c7dc3118e9cfd"]
 ]
