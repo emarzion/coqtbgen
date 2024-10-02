@@ -7,6 +7,7 @@ Require Import Games.Game.Player.
 Require Import Games.Game.Game.
 Require Import Games.Game.Draw.
 Require Import Games.Game.Win.
+Require Import Games.Game.NoWorse.
 Require Import TBGen.TB.TB.
 Require Import TBGen.Util.AssocList.
 Require Import TBGen.Util.IntHash.
@@ -231,63 +232,68 @@ Proof.
       (discriminate || eexists; eauto).
 Defined.
 
-Lemma conditional_white_D_draw :
-  @draw SampleGame (Black, C) ->
-  @draw SampleGame (White, D).
+Lemma conditional_white_D_draw p :
+  @no_worse SampleGame p (Black, C) ->
+  @no_worse SampleGame p (White, D).
 Proof.
   intro d.
-  refine (@play_draw SampleGame (White, D) White _ _ _ LRS_L d).
-  - reflexivity.
-  - reflexivity.
-  - intros []; simpl.
-    + left; exact d.
-    + right.
-      apply (@eloise_win SampleGame Black (Black, E) eq_refl eq_refl LRS_R).
-      simpl.
-      apply atom_win.
-      reflexivity.
-    + right.
-      apply (@eloise_win SampleGame Black (Black, D) eq_refl eq_refl LRS_R).
-      simpl.
-      apply abelard_win; try reflexivity.
+  destruct p.
+  - apply eloise_no_worse with (m := LRS_L); auto.
+ - apply abelard_no_worse; auto.
+    intros []; simpl.
+    + exact d.
+    + apply win_no_worse.
+      apply eloise_win with (m := LRS_R); auto.
+      apply atom_win; reflexivity.
+    + apply win_no_worse.
+      apply eloise_win with (m := LRS_R); auto.
+      apply abelard_win; auto.
       intros [].
-      * simpl.
-        apply (@eloise_win SampleGame Black (Black, F) eq_refl eq_refl LS_S).
-        apply atom_win. reflexivity.
-      * simpl.
-        apply (@eloise_win SampleGame Black (Black, E) eq_refl eq_refl LRS_R).
-        apply atom_win. reflexivity.
+      * apply eloise_win with (m := LS_S); auto.
+        apply atom_win; auto.
+      * apply eloise_win with (m := LRS_R); auto.
+        apply atom_win; auto.
 Defined.
 
-CoFixpoint black_C_draw :
-  @draw SampleGame (Black, C).
-  refine (@play_draw SampleGame (Black, C) Black _ _ _ LRS_R _).
+CoFixpoint black_C_neither_worse p :
+  @no_worse SampleGame p (Black, C).
 Proof.
-  - reflexivity.
-  - reflexivity.
-  - intros []; simpl.
-    + right.
-      apply (@eloise_win SampleGame White (White, B) eq_refl eq_refl LRS_L).
-      apply atom_win.
-      reflexivity.
-    + left.
-      apply conditional_white_D_draw.
-      auto.
-    + right.
-      apply (@eloise_win SampleGame White (White, C) eq_refl eq_refl LRS_L).
-      apply abelard_win; try reflexivity.
-      intros [].
-      * simpl.
-        apply (@eloise_win SampleGame White (White, A) eq_refl eq_refl RS_S).
-        apply atom_win.
-        reflexivity.
-      * simpl.
+  destruct p.
+  - apply abelard_no_worse.
+    + reflexivity.
+    + reflexivity.
+    + intros []; simpl.
+      * apply win_no_worse.
         apply (@eloise_win SampleGame White (White, B) eq_refl eq_refl LRS_L).
         apply atom_win.
         reflexivity.
-  - simpl.
-    apply conditional_white_D_draw.
-    auto.
+      * apply conditional_white_D_draw.
+        apply black_C_neither_worse.
+      * apply win_no_worse.
+        apply (@eloise_win SampleGame White (White, C) eq_refl eq_refl LRS_L).
+        apply abelard_win; try reflexivity.
+        intros [].
+        -- simpl.
+           apply (@eloise_win SampleGame White (White, A) eq_refl eq_refl RS_S).
+           apply atom_win.
+           reflexivity.
+        -- simpl.
+           apply (@eloise_win SampleGame White (White, B) eq_refl eq_refl LRS_L).
+           apply atom_win.
+           reflexivity.
+  - apply eloise_no_worse with (m := LRS_R).
+    + reflexivity.
+    + reflexivity.
+    + simpl.
+      apply conditional_white_D_draw.
+      apply black_C_neither_worse.
+Defined.
+
+Definition black_C_draw :
+  @draw SampleGame (Black, C).
+Proof.
+  apply both_no_worse_draw with (p := White);
+  apply black_C_neither_worse.
 Defined.
 
 Global Instance Fin_SampleGame : FinGame SampleGame.
