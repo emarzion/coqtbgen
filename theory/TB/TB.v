@@ -4,10 +4,12 @@ Import ListNotations.
 
 Require Import Compare_dec.
 
+Require Import Games.Util.ListUtil.
 Require Import Games.Game.Game.
 Require Import Games.Game.Player.
 Require Import Games.Game.Draw.
 Require Import Games.Game.Win.
+Require Import Games.Game.NoWorse.
 Require Import Games.Game.Strategy.
 
 Require Import TBGen.Util.IntMap.
@@ -1735,12 +1737,14 @@ Proof.
     intro; simpl; lia.
 Qed.
 
-Lemma TB_lookup_None : forall s,
+(* todo *)
+Lemma TB_lookup_None_eloise : forall p s,
+  to_play s = p ->
   tb_lookup TB_final s = None ->
   (atomic_res s = Some Draw) +
   (atomic_res s = None) * { m : Move s & tb_lookup TB_final (exec_move s m) = None }.
 Proof.
-  intros s tb_s.
+  intros p s s_play tb_s.
   destruct atomic_res eqn:s_res.
   - destruct r.
     + erewrite TB_final_respects_atomic_wins in tb_s;
@@ -1771,7 +1775,8 @@ Proof.
           rewrite w_d.
           eapply (tb_small _ TB_final_valid); eauto.
         }
-        assert (to_play s = opp (opp (to_play s))) as s_play by now rewrite opp_invol.
+        rewrite s_play in X.
+        rewrite <- opp_invol in s_play.
         pose (w' := abelard_win s_res s_play (fun m => projT1 (X m))).
         assert (depth w' <= curr TB_final).
         { simpl.
@@ -1786,6 +1791,8 @@ Proof.
              destruct (X m); simpl in Hm.
              congruence.
         }
+        rewrite s_play.
+        rewrite opp_invol.
         exists w'; split.
         -- apply PeanoNat.Nat.le_antisymm; auto.
            exact (tb_None _ TB_final_valid w' tb_s).
@@ -1815,38 +1822,75 @@ Proof.
         simpl; lia.
 Defined.
 
+Lemma TB_lookup_None_abelard : forall p s,
+  to_play s = opp p ->
+  tb_lookup TB_final s = None ->
+  (atomic_res s = Some Draw) +
+  (atomic_res s = None) * (forall m,
+    (tb_lookup TB_final (exec_move s m) = None) +
+    { n : nat & tb_lookup TB_final (exec_move s m) = Some (p, n) }).
+Proof.
+  intros p s s_play tb_s.
+  destruct atomic_res as [[|]|] eqn:s_res.
+  - erewrite TB_final_respects_atomic_wins in tb_s.
+    + congruence.
+    + exact s_res.
+  - now left.
+  - right; split; auto.
+    intro m.
+    destruct (tb_lookup TB_final (exec_move s m)) as [[pl n]|] eqn:Hm.
+    + right; exists n.
+      repeat f_equal.
+      destruct (player_id_or_opp pl p) as [|pf]; auto.
+      exfalso.
+      apply (no_final_curr_mate (to_play s) s).
+      pose proof (TB_final_lookup_mate _ pl n Hm) as mt.
+      destruct mt as [w [w_depth w_min]].
+      rewrite <- pf in s_play.
+      rewrite opp_invol in s_play.
+      rewrite s_play.
+      pose (w' := eloise_win s_res s_play m w).
+      pose proof (tb_None _ TB_final_valid w' tb_s) as pf'.
+      simpl in pf'.
+      epose proof (tb_small _ TB_final_valid Hm).
+      assert (curr TB_final = S n) as pf'' by lia.
+      rewrite pf''.
+      exists w'; split; simpl; [lia|].
+      intro w''.
+      pose proof (tb_None _ TB_final_valid w'' tb_s).
+      simpl; lia.
+    + now left.
+Defined.
+
+CoFixpoint TB_final_lookup_no_worse p : forall s,
+  tb_lookup TB_final s = None ->
+  no_worse p s.
+Proof.
+  intros s tb_s.
+  destruct (player_id_or_opp_r_t (to_play s) p) as [s_play|s_play].
+  - destruct (TB_lookup_None_eloise p s s_play tb_s) as [s_res|[s_res [m Hm]]].
+    + apply atom_draw_no_worse; exact s_res.
+    + apply (eloise_no_worse p s s_play s_res m).
+      apply TB_final_lookup_no_worse; exact Hm.
+  - destruct (TB_lookup_None_abelard p s s_play tb_s) as [s_res|[s_res pf]].
+    + apply atom_draw_no_worse; exact s_res.
+    + apply (abelard_no_worse p s s_play s_res).
+      intro m.
+      destruct (pf m) as [Hm|[n Hmn]].
+      * apply TB_final_lookup_no_worse.
+        exact Hm.
+      * apply win_no_worse.
+        apply TB_final_lookup_mate in Hmn.
+        exact (projT1 Hmn).
+Defined.
+
 Theorem TB_final_lookup_draw : forall s,
   tb_lookup TB_final s = None ->
   draw s.
 Proof.
-  cofix d.
-  intros s tb_s.
-  destruct (TB_lookup_None s tb_s) as
-    [|[s_res [m tb_sm]]].
-  - now apply atom_draw.
-  - eapply (play_draw s _ eq_refl s_res).
-    + clear m tb_sm.
-      intro m.
-      destruct (tb_lookup TB_final (exec_move s m)) eqn:tb_sm.
-      * destruct p as [pl n].
-        destruct (player_id_or_opp_r_t (to_play s) pl) as [pf|pf].
-        ** destruct (tb_mate TB_final TB_final_valid tb_sm) as
-           [w [w_d w_m]].
-           erewrite mate_TB_final_lookup in tb_s; [congruence|].
-           exists (eloise_win s_res pf _ w); split; [reflexivity|].
-           intro w'; simpl.
-           pose (tb_None _ TB_final_valid w' tb_s).
-           pose (tb_small _ TB_final_valid tb_sm); lia.
-        ** right.
-           rewrite pf.
-           rewrite opp_invol.
-           eapply tb_mate; [|eauto].
-           exact TB_final_valid.
-      * left.
-        apply d.
-        exact tb_sm.
-    + apply d.
-      exact tb_sm.
+  intros.
+  apply both_no_worse_draw with (p := to_play s);
+  apply TB_final_lookup_no_worse; auto.
 Defined.
 
 Theorem draw_TB_final_lookup : forall s,

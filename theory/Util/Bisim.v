@@ -4,6 +4,7 @@ Require Import Games.Game.Player.
 Require Import Games.Game.Strategy.
 Require Import Games.Game.Win.
 Require Import Games.Game.Draw.
+Require Import Games.Game.NoWorse.
 
 Require Import TBGen.Util.ListUtil.
 
@@ -143,6 +144,30 @@ Proof.
     apply w_min.
 Qed.
 
+CoFixpoint bisim_no_worse {G H} {p} (B : Bisim G H) s s'
+  (b : bisim G H B s s') (n : no_worse p s) : no_worse p s'.
+Proof.
+  destruct n.
+  - apply atom_draw_no_worse.
+    erewrite <- atomic_bisim; eauto.
+  - apply atom_win_no_worse.
+    erewrite <- atomic_bisim; eauto.
+  - apply eloise_no_worse with (m := forward G H B b m).
+    + erewrite <- to_play_bisim; eauto.
+    + erewrite <- atomic_bisim; eauto.
+    + apply bisim_no_worse with (B := B) (s := exec_move s m).
+      * apply exec_forward.
+      * exact n.
+  - apply abelard_no_worse.
+    + erewrite <- to_play_bisim; eauto.
+    + erewrite <- atomic_bisim; eauto.
+    + intro m'.
+      pose (m'' := back G H B b m').
+      apply bisim_no_worse with (B := B) (s := exec_move s m'').
+      * apply exec_back.
+      * apply n.
+Defined.
+
 CoFixpoint bisim_draw {G H} (B : Bisim G H) s s'
   (b : bisim G H B s s') 
   (d : draw s) : draw s'.
@@ -155,15 +180,10 @@ Proof.
     + erewrite <- atomic_bisim; eauto.
     + intro m'.
       pose (m'' := back G H B b m').
-      destruct (s0 m'').
-      * left.
-        apply bisim_draw with (B := B) (s := exec_move s m'').
-        -- apply exec_back.
-        -- exact d0.
-      * right.
-        apply bisim_win with (s := exec_move s m'') (B := B).
-        -- apply exec_back.
-        -- exact w.
+      specialize (n m'').
+      apply bisim_no_worse with (B := B) (s := exec_move s m'').
+      -- apply exec_back.
+      -- exact n.
     + apply bisim_draw with (B := B) (s :=
         exec_move s m).
       * apply exec_forward.
