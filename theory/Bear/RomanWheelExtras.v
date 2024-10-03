@@ -15,7 +15,6 @@ Require Import TBGen.Util.IntHash.
 Require Import TBGen.Util.OMap.
 Require Import TBGen.Bear.Sort.
 Require Import TBGen.Bear.BearGame.
-Require Import TBGen.Bear.RomanWheelExtras.
 Require Import TBGen.Bear.RomanWheel.
 Require Import TBGen.TB.TB.
 Require Import TBGen.TB.OCamlTB.
@@ -159,19 +158,3 @@ Definition rw_tb_strat (pl : Player.Player)
   (tb : OCamlTablebase (BearGame RomanWheel))
  : Strategy.strategy pl s :=
   tb_strat s pl tb.
-
-Set Warnings "-extraction-default-directory".
-
-Separate Extraction
-  make_RW_State
-  init_RW_State
-  RW_exec_move
-  BearGame.enum_moves
-  print_RW_move
-  query_RW_TB
-  p_leb
-  rw_tb_strat
-  create_Move
-  is_hunter
-  is_bear
-  .
