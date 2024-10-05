@@ -56,7 +56,7 @@ Context `{forall s : GameState G, Discrete (Move s)}.
 Context {M : Type -> Type}.
 Context `{IntMap M}.
 
-Inductive Step :=
+Variant Step :=
   | Eloise : Step
   | Abelard : Step.
 
@@ -1649,23 +1649,6 @@ Proof.
   - now apply (mate_tb _ TB_final_valid).
 Qed.
 
-Lemma map_fg_lemma {X Y Z} `{Discrete Y} {f : X -> Z} {g : Y -> Z} :
-  forall {xs ys}, map f xs = map g ys -> 
-  forall y, In y ys -> {x : X & In x xs /\ f x = g y}.
-Proof.
-  induction xs as [|x xs']; intros ys pf y Hy.
-  - destruct ys; [destruct Hy|inversion pf].
-  - destruct ys; [inversion pf|].
-    destruct (eq_dec y0 y).
-    + exists x; split.
-      * now left.
-      * inversion pf; congruence.
-    + inversion pf.
-      destruct (IHxs' _ H8 y).
-      * destruct Hy; [contradiction|auto].
-      * exists x0; split; [now right| tauto].
-Defined.
-
 Lemma forallb_false {X} (p : X -> bool) (xs : list X) :
   forallb p xs = false -> {x : X & In x xs /\ p x = false}.
 Proof.
@@ -1676,17 +1659,6 @@ Proof.
       exists x'; tauto.
     + exists x; tauto.
 Defined.
-
-Lemma forallb_true {X} (p : X -> bool) (xs : list X) :
-  forallb p xs = true -> forall x, In x xs -> p x = true.
-Proof.
-  induction xs as [|x' xs']; intros Hpxs x Hx.
-  - destruct Hx.
-  - destruct Hx; subst; simpl in *.
-    + destruct (p x); [reflexivity|discriminate].
-    + destruct (p x'); [simpl in *|discriminate].
-      now apply IHxs'.
-Qed.
 
 Definition respects_atomic_wins (tb : TB) : Prop :=
   forall s pl, atomic_res s = Some (Win pl) ->

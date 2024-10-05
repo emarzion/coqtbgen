@@ -128,21 +128,6 @@ Proof.
     now rewrite IHps.
 Qed.
 
-Lemma hash_adds_app {M} {X Y} `{IntMap M} `{IntHash X}
-  {ps : list (X * Y)} : forall qs m,
-  hash_adds ps (hash_adds qs m) = hash_adds (qs ++ ps) m.
-Proof.
-  induction ps; intros.
-  - simpl; now rewrite app_nil_r.
-  - simpl.
-    destruct a.
-    assert (qs ++ (x,y) :: ps = (qs ++ [(x,y)]) ++ ps)%list.
-    { now rewrite <- app_assoc. }
-    rewrite H1.
-    rewrite <- IHps.
-    now rewrite hash_adds_add.
-Qed.
-
 Lemma hash_size_add_le {M} {X Y} `{IntMap M} `{IntHash X}
   (x : X) (y : Y) : forall m : M Y,
   size m <= size (hash_add x y m).
@@ -150,17 +135,6 @@ Proof.
   intro.
   rewrite hash_size_add.
   destruct hash_lookup; lia.
-Qed.
-
-Lemma hash_size_add_lt {M} {X Y} `{IntMap M} `{IntHash X}
-  : forall (m : M Y) (x : X) (y : Y),
-  hash_lookup x m = None ->
-  size m < size (hash_add x y m).
-Proof.
-  intros m x y Hlookup.
-  rewrite hash_size_add.
-  rewrite Hlookup.
-  lia.
 Qed.
 
 Lemma hash_size_adds_le {M} {X Y} `{IntMap M} `{IntHash X}

@@ -11,7 +11,7 @@ Require Import TBGen.Bear.Graph.
 Require Import TBGen.Bear.BearGame.
 Require Import TBGen.TB.TB.
 
-Inductive Spoke :=
+Variant Spoke :=
   S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8.
 
 Definition clockwise (s : Spoke) : Spoke :=
@@ -41,13 +41,13 @@ Definition c_clockwise (s : Spoke) : Spoke :=
 Definition list_spokes :=
   [S1;S2;S3;S4;S5;S6;S7;S8].
 
-Inductive SpokeLoc :=
+Variant SpokeLoc :=
   Mid | L | R.
 
 Definition list_locs :=
   [Mid;L;R].
 
-Inductive RWVert :=
+Variant RWVert :=
   | Center
   | SpokeVert (s : Spoke) (l : SpokeLoc).
 
