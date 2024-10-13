@@ -3,7 +3,7 @@ Import ListNotations.
 Require Import Compare_dec.
 
 Require Import Games.Game.Game.
-Require Import TBGen.TB.TB.
+Require Import TBGen.SymTB.TB.
 Require Import TBGen.Util.OMap.
 Require Import TBGen.Util.IntHash.
 Require Import Games.Game.Player.
@@ -21,15 +21,15 @@ Record OCamlTablebase (G : Game) `{IntHash (GameState G)} : Type := {
 Arguments tb_whites {_} {_} _.
 Arguments tb_blacks {_} {_} _.
 
-Definition query_TB {G} `{IntHash (GameState G)}
+Definition query_TB {G} `{IntHash (GameState G)} `{Symmetry G}
   (tb : OCamlTablebase G) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => hash_lookup s (tb_whites tb)
-  | Black => hash_lookup s (tb_blacks tb)
+  | White => hash_lookup (normalize s) (tb_whites tb)
+  | Black => hash_lookup (normalize s) (tb_blacks tb)
   end.
 
 Record CorrectTablebase {M} `{IntMap M}
-  {G} `{IntHash (GameState G)} (tb : OCamlTablebase G) := {
+  {G} `{IntHash (GameState G)} `{Symmetry G} (tb : OCamlTablebase G) := {
 
   query_mate : forall s pl n,
     query_TB tb s = Some (pl, n) ->
@@ -54,7 +54,7 @@ Arguments query_draw {_} {_} {_} {_}.
 
 Definition certified_TB {M} `{IntMap M}
   {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
-  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)} :
   OCamlTablebase G :=
   match TB_final with
   | Build_TB _ _ wps bps _ _ =>
@@ -66,7 +66,7 @@ Definition certified_TB {M} `{IntMap M}
 
 Lemma certified_TB_whites {M} `{IntMap M}
   {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
-  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)} :
   tb_whites certified_TB = white_positions TB_final.
 Proof.
   unfold certified_TB.
@@ -75,7 +75,7 @@ Qed.
 
 Lemma certified_TB_blacks {M} `{IntMap M}
   {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
-  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)} :
   tb_blacks certified_TB = black_positions TB_final.
 Proof.
   unfold certified_TB.
@@ -84,7 +84,7 @@ Qed.
 
 Lemma certified_TB_correct {M} `{IntMap M}
   {G} `{IntHash (GameState G)} `{FinGame G} `{Reversible G}
-  `{NiceGame G} `{forall s : GameState G, Discrete (Move s)} :
+  `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)} :
   CorrectTablebase certified_TB.
 Proof.
   constructor;
@@ -153,7 +153,7 @@ Qed.
 
 CoFixpoint tb_strat {M} {G} (s : GameState G) pl
   `{IntMap M}
-  `{IntHash (GameState G)}
+  `{IntHash (GameState G)} `{Symmetry G}
   (tb : OCamlTablebase G) : strategy pl s.
 Proof.
   - destruct (atomic_res s) eqn:s_res.
@@ -164,7 +164,7 @@ Proof.
              (query_TB tb (exec_move s m1))
              (query_TB tb (exec_move s m2))
           ) (enum_moves s) (move_enum_all_ne s_res)).
-        exact (eloise_strategy s_res s_play m (@tb_strat _ _ _ pl _ _ tb)).
+        exact (eloise_strategy s_res s_play m (@tb_strat _ _ _ pl _ _ _ tb)).
       * exact (abelard_strategy s_res s_play (fun m =>
-          @tb_strat _ _ _ pl _ _ tb)).
+          @tb_strat _ _ _ pl _ _ _ tb)).
 Defined.

@@ -8,8 +8,26 @@ Require Import Games.Game.NoWorse.
 
 Require Import TBGen.Util.ListUtil.
 
-Record Bisim (G H : Game) : Type := {
-  bisim : GameState G -> GameState H -> Prop;
+(*
+Definition inv_forward s m s' :
+  bisim G G auto (exec_move s m) s' ->
+  { s'' : GameState G & Move s'' }.
+Proof.
+  intro pf.
+
+Admitted.
+
+Lemma inv_forward_correct s m s' (b : bisim G G auto (exec_move s m) s') :
+  exec_move (projT1 (inv_forward s m s' b)) (projT2 (inv_forward s m s' b)) = s'.
+Admitted.
+
+Lemma exec_inv_forward s m s' (b : bisim G G auto (exec_move s m) s') :
+  bisim G G auto s (projT1 (inv_forward s m s' b)).
+Admitted.
+*)
+
+Record InvertibleBisim (G H : Game) : Type := {
+  bisim : GameState G -> GameState H -> Type;
 
   forward : forall {s s'}, bisim s s' ->
     Move s -> Move s';
@@ -38,9 +56,28 @@ Record Bisim (G H : Game) : Type := {
   back_forward : forall s s' m (b : bisim s s'),
     back b (forward b m) = m;
 
+  inv_forward s m s' :
+    bisim (exec_move s m) s' ->
+    { s'' : GameState H & Move s'' };
+
+  inv_forward_correct s m s' (b : bisim (exec_move s m) s') :
+    exec_move (projT1 (inv_forward s m s' b)) (projT2 (inv_forward s m s' b)) = s';
+
+  exec_inv_forward s m s' (b : bisim (exec_move s m) s') :
+    bisim s (projT1 (inv_forward s m s' b));
+
+  inv_back s m s' :
+    bisim s' (exec_move s m) ->
+    { s'' : GameState G & Move s'' };
+
+  inv_back_correct s m s' (b : bisim s' (exec_move s m)) :
+    exec_move (projT1 (inv_back s m s' b)) (projT2 (inv_back s m s' b)) = s';
+
+  exec_inv_back s m s' (b : bisim s' (exec_move s m)) :
+    bisim (projT1 (inv_back s m s' b)) s;
   }.
 
-Definition Bisim_sym {G H} (B : Bisim G H) : Bisim H G.
+Definition Bisim_sym {G H} (B : InvertibleBisim G H) : InvertibleBisim H G.
 Proof.
   unshelve econstructor.
   - exact (fun s' s => bisim G H B s s').
@@ -48,23 +85,33 @@ Proof.
     apply (@back G H B).
   - simpl; intros s s'.
     apply (@forward G H B).
+  - intros.
+    eapply inv_back.
+    exact X.
+  - intros.
+    eapply inv_forward.
+    exact X.
   - intros; symmetry.
-    apply (to_play_bisim G H B _ _ H0).
+    apply (to_play_bisim G H B _ _ X).
   - intros; symmetry.
-    apply (atomic_bisim G H B _ _ H0).
+    apply (atomic_bisim G H B _ _ X).
   - simpl; intros. apply exec_back.
   - simpl; intros. apply exec_forward.
   - simpl; intros. apply back_forward.
   - simpl; intros. apply forward_back.
+  - apply inv_back_correct.
+  - apply exec_inv_back.
+  - apply inv_forward_correct.
+  - apply exec_inv_forward.
 Defined.
 
-Lemma bisim_sym {G H} (B : Bisim G H) s s' :
+Lemma bisim_sym {G H} (B : InvertibleBisim G H) s s' :
   bisim G H B s s' -> bisim H G (Bisim_sym B) s' s.
 Proof.
   simpl; auto.
 Qed.
 
-Fixpoint bisim_win {G H} {p} (B : Bisim G H) s s'
+Fixpoint bisim_win {G H} {p} (B : InvertibleBisim G H) s s'
   (b : bisim G H B s s') 
   (w : win p s) : win p s'.
 Proof.
@@ -103,7 +150,7 @@ Proof.
     apply list_max_is_max; auto.
 Qed.
 
-Lemma bisim_win_depth {G H} {p} (B : Bisim G H)
+Lemma bisim_win_depth {G H} {p} (B : InvertibleBisim G H)
   s (w : win p s) : forall s' (b : bisim G H B s s'),
   depth (bisim_win B s s' b w) = depth w.
 Proof.
@@ -130,7 +177,7 @@ Proof.
       * apply H.
 Qed.
 
-Lemma bisim_mate {G H} {p} {n} (B : Bisim G H) s s' :
+Lemma bisim_mate {G H} {p} {n} (B : InvertibleBisim G H) s s' :
   bisim G H B s s' -> mate p s n -> mate p s' n.
 Proof.
   intros b [w [w_depth w_min]].
@@ -144,7 +191,7 @@ Proof.
     apply w_min.
 Qed.
 
-CoFixpoint bisim_no_worse {G H} {p} (B : Bisim G H) s s'
+CoFixpoint bisim_no_worse {G H} {p} (B : InvertibleBisim G H) s s'
   (b : bisim G H B s s') (n : no_worse p s) : no_worse p s'.
 Proof.
   destruct n.
@@ -168,7 +215,7 @@ Proof.
       * apply n.
 Defined.
 
-CoFixpoint bisim_draw {G H} (B : Bisim G H) s s'
+CoFixpoint bisim_draw {G H} (B : InvertibleBisim G H) s s'
   (b : bisim G H B s s') 
   (d : draw s) : draw s'.
 Proof.

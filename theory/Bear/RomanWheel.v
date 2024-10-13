@@ -698,5 +698,3 @@ Global Instance IntHash_RW : IntHash (Game.GameState (BearGame RomanWheel)) := {
   hash := hash_RW_State;
   hash_inj := hash_RW_State_inj;
   |}.
-
-Definition RW_TB := Bear_TB RomanWheel.
