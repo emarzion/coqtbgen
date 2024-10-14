@@ -15,10 +15,10 @@ Require Import TBGen.Bear.RomanWheel.
 Require Import TBGen.Bear.GroupAction.
 
 Definition Fin n : Type :=
-  { i : nat & i < n }.
+  { i : nat | i < n }.
 
 Definition val {n} (i : Fin n) : nat :=
-  projT1 i.
+  proj1_sig i.
 
 (* technically doesn't need proof irrel. *)
 Lemma val_inj {n} (i j : Fin n) :
@@ -49,6 +49,15 @@ Lemma val_plus {n} (i j : Fin n) :
 Proof.
   destruct i,j; simpl.
   reflexivity.
+Qed.
+
+Lemma Fin_plus_comm {n} (i j : Fin n) :
+  Fin_plus i j = Fin_plus j i.
+Proof.
+  apply val_inj.
+  repeat rewrite val_plus.
+  rewrite Nat.add_comm.
+  auto.
 Qed.
 
 Definition Fin_inv {n} : Fin n -> Fin n.
@@ -169,6 +178,17 @@ Definition rotate_vert (n : nat) (v : RWVert) : RWVert :=
   | SpokeVert s l => SpokeVert (rotate_spoke n s) l
   end.
 
+Lemma successors_Center : forall v,
+  In v (@successors RomanWheel Center) <->
+  exists s, v = SpokeVert s Mid.
+Proof.
+  intro v; split; intro pf.
+  - simpl in pf.
+    firstorder; subst; eexists; eauto.
+  - destruct pf as [s Hs]; subst.
+    simpl; destruct s; tauto.
+Qed.
+
 Global Instance RW_Z_8 : GroupAction RomanWheel Z_8.
 Proof.
   refine {|
@@ -188,7 +208,10 @@ Proof.
   - intros x v v' pf.
     destruct v.
     + simpl rotate_vert.
-      apply cheat.
+      rewrite successors_Center in *.
+      destruct pf as [s Hs]; subst.
+      exists (rotate_spoke (val x) s).
+      reflexivity.
     + apply cheat.
 Defined.
 
@@ -210,19 +233,55 @@ Proof.
 Qed.
 
 Definition spoke_Fin (s : Spoke) : Fin 8 :=
-  existT _ (spoke_nat s) (spoke_nat_small s).
+  exist _ (spoke_nat s) (spoke_nat_small s).
 
-Definition compute_rotation (s : BG_State RomanWheel) : Fin 8.
+Fixpoint mult {n} (k : nat) (i : Fin (S n)) : Fin (S n) :=
+  match k with
+  | 0 => Fin_zero
+  | S m => Fin_plus i (mult m i)
+  end.
+
+Fixpoint spoke_total (vs : list RWVert) : carrier Z_8 :=
+  match vs with
+  | [] => Fin_zero
+  | Center :: vs' => spoke_total vs'
+  | SpokeVert s _ :: vs' => Fin_plus (spoke_Fin s) (spoke_total vs')
+  end.
+
+Definition compute_rotation (s : BG_State RomanWheel) : carrier Z_8 :=
+  match bear s with
+  | Center => mult 3 (spoke_total (hunters s))
+  | SpokeVert s' l => spoke_Fin s'
+  end.
+
+Lemma spoke_Fin_rotate_spoke : forall (x : carrier Z_8) s,
+  spoke_Fin (rotate_spoke (val x) s) =
+  (inv x) ** (spoke_Fin s).
 Proof.
+Admitted.
+
+Lemma compute_rotation_BG_State_act : forall (x : carrier Z_8) s,
+  compute_rotation (BG_State_act x s) =
+  compute_rotation s ** (inv x).
+Proof.
+  intros.
   destruct (bear s) eqn:?.
-  - destruct s; simpl in *.
-    destruct hunters.
-    + discriminate.
-    + destruct r.
-      * elim bear_not_hunter; now left.
-      * exact (spoke_Fin s).
-  - exact (spoke_Fin s0).
-Defined.
+  -
+  unfold compute_rotation.
+  simpl.
+  rewrite Heqv.
+  simpl.
+  admit.
+  -
+  unfold compute_rotation.
+  simpl.
+  rewrite Heqv.
+  simpl rotate_vert.
+  cbv iota.
+  rewrite spoke_Fin_rotate_spoke.
+  rewrite Fin_plus_comm.
+  reflexivity.
+Admitted.
 
 Global Instance RW_OrbitSelector : OrbitSelector RomanWheel Z_8.
 Proof.
@@ -232,9 +291,13 @@ Proof.
   - intro s.
     exists (compute_rotation s).
     reflexivity.
-  - apply cheat.
+  - intros s x.
+    rewrite compute_rotation_BG_State_act.
+    rewrite BG_State_act_comp.
+    rewrite <- (BG_State_act_comp (inv x)).
+    rewrite inv_left.
+    now rewrite BG_State_act_id.
 Defined.
 
 Definition RW_TB :=
   Bear_TB RomanWheel Z_8.
-
