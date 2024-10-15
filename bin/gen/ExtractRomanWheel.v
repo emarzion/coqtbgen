@@ -13,8 +13,11 @@ Require Import TBGen.Util.OMap.
 Require Import TBGen.Bear.Sort.
 Require Import TBGen.Bear.BearGame.
 Require Import TBGen.Bear.RomanWheel.
+Require Import TBGen.Bear.RomanWheelSym.
 Require Import TBGen.TB.TB.
 
 Set Warnings "-extraction-default-directory".
+
+Extract Constant PeanoNat.Nat.modulo => "fun x y -> x mod y".
 
 Extraction "TBGen.ml" RW_TB.

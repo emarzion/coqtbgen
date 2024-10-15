@@ -17,8 +17,9 @@ Require Import TBGen.Bear.Sort.
 Require Import TBGen.Bear.BearGame.
 Require Import TBGen.Bear.RomanWheelExtras.
 Require Import TBGen.Bear.RomanWheel.
-Require Import TBGen.TB.TB.
-Require Import TBGen.TB.OCamlTB.
+Require Import TBGen.Bear.RomanWheelSym.
+Require Import TBGen.SymTB.TB.
+Require Import TBGen.SymTB.OCamlTB.
 
 Definition make_BG_State {G} (pl : Player.Player)
   (b h1 h2 h3 : Graph.Vert G) : option (BG_State G).

@@ -9,14 +9,16 @@ Require Import Games.Game.Game.
 Require Import Games.Game.Game.
 Require Import TBGen.Bear.Graph.
 Require Import TBGen.Bear.Sort.
-Require Import TBGen.TB.TB.
+Require Import TBGen.SymTB.TB.
 Require Import Games.Game.Player.
 Require Import TBGen.Util.IntHash.
 Require Import Games.Util.Dec.
 Require Import TBGen.Util.AssocList.
 Require Import TBGen.Util.IntMap.
 Require Import TBGen.Util.OMap.
-Require Import TBGen.TB.OCamlTB.
+Require Import TBGen.SymTB.OCamlTB.
+Require Import TBGen.Bear.GroupAction.
+Require Import TBGen.Util.Bisim.
 
 Definition NoDup_dec {X} `{Discrete X} (xs : list X) :
   { NoDup xs } + { ~ NoDup xs }.
@@ -1074,5 +1076,582 @@ Proof.
       congruence.
 Defined.
 
-Definition Bear_TB (G : Graph) `{hsh : IntHash (GameState (BearGame G))}
+Definition BG_State_act {G} {H} `{GroupAction G H}
+  (x : carrier H) (s : BG_State G) : BG_State G.
+Proof.
+  refine {|
+    to_play := to_play s;
+    bear := x # (bear s);
+    hunters := insertion_sort (map (act x) (hunters s));
+    hunters_sort := _;
+    hunters_3 := _;
+    hunters_distinct := _;
+    bear_not_hunter := _;
+  |}.
+  - apply insertion_sort_sorts.
+  - rewrite insertion_sort_length.
+    rewrite map_length.
+    apply s.
+  - apply insertion_sort_NoDup.
+    apply FinFun.Injective_map_NoDup.
+    + cbv; apply act_inj.
+    + apply s.
+  - intro pf.
+    apply insertion_sort_In_1 in pf.
+    rewrite in_map_iff in pf.
+    destruct pf as [v [Hv1 Hv2]].
+    apply act_inj in Hv1; subst.
+    exact (bear_not_hunter s Hv2).
+Defined.
+
+Lemma sorted_list_eq {X} `{Ord X} (xs : list X) : forall xs',
+  sorted xs -> sorted xs' ->
+  (forall x, In x xs <-> In x xs') ->
+  NoDup xs ->
+  NoDup xs' ->
+  xs = xs'.
+Proof.
+  induction xs; intros.
+  - destruct xs'; auto.
+    assert (In x (x :: xs')) as pf by now left.
+    rewrite <- H2 in pf.
+    destruct pf.
+  - destruct xs'.
+    + assert (In a (a :: xs)) as pf by now left.
+      rewrite H2 in pf.
+      destruct pf.
+    + assert (a = x).
+      { assert (In a (a :: xs)) by now left.
+        rewrite H2 in H5.
+        destruct H5; [congruence|].
+        assert (In x (x :: xs')) by now left.
+        rewrite <- H2 in H6.
+        destruct H6; [congruence|].
+        apply ord_le_antisym.
+        * inversion H0.
+          rewrite Forall_forall in H10.
+          now apply H10.
+        * inversion H1.
+          rewrite Forall_forall in H10.
+          now apply H10.
+      }
+      subst; f_equal.
+      * apply IHxs.
+        -- now inversion H0.
+        -- now inversion H1.
+        -- intro y; split; intro pf.
+           ++ assert (In y (x :: xs)) by now right.
+              rewrite H2 in H5.
+              destruct H5; auto.
+              subst.
+              inversion H3; contradiction.
+           ++ assert (In y (x :: xs')) by now right.
+              rewrite <- H2 in H5.
+              destruct H5; auto.
+              subst.
+              inversion H4; contradiction.
+        -- now inversion H3.
+        -- now inversion H4.
+Qed.
+
+Lemma BG_State_act_comp {G} {H} `{GroupAction G H}
+  (x y : carrier H) (s : BG_State G) :
+  BG_State_act (x ** y) s =
+  BG_State_act x (BG_State_act y s).
+Proof.
+  apply BG_State_ext.
+  - reflexivity.
+  - simpl.
+    apply act_comp.
+  - simpl.
+    apply sorted_list_eq.
+    + apply insertion_sort_sorts.
+    + apply insertion_sort_sorts.
+    + intro v; split; intro pf.
+      * rewrite insertion_sort_In in *.
+        rewrite in_map_iff in *.
+        destruct pf as [v' [Hv'1 Hv'2]].
+        exists (y # v'); split.
+        -- now rewrite <- act_comp.
+        -- rewrite insertion_sort_In.
+           now apply in_map.
+      * rewrite insertion_sort_In in *.
+        rewrite in_map_iff in *.
+        destruct pf as [v' [Hv'1 Hv'2]].
+        rewrite insertion_sort_In in Hv'2.
+        rewrite in_map_iff in Hv'2.
+        destruct Hv'2 as [v'' [Hv''1 Hv''2]].
+        exists v''; split; auto.
+        rewrite act_comp; congruence.
+    + apply insertion_sort_NoDup.
+      apply FinFun.Injective_map_NoDup.
+      * cbv; apply act_inj.
+      * apply s.
+    + apply insertion_sort_NoDup.
+      apply FinFun.Injective_map_NoDup.
+      * cbv; apply act_inj.
+      * apply insertion_sort_NoDup.
+        apply FinFun.Injective_map_NoDup.
+        -- cbv; apply act_inj.
+        -- apply s.
+Qed.
+
+Lemma map_id {X} (f : X -> X) : (forall x, f x = x) -> forall l,
+  map f l = l.
+Proof.
+  intros Hf l.
+  induction l.
+  - reflexivity.
+  - simpl.
+    rewrite Hf.
+    rewrite IHl; auto.
+Qed.
+
+Lemma BG_State_act_id {G} {H} `{GroupAction G H}
+  (s : BG_State G) :
+  BG_State_act id s = s.
+Proof.
+  apply BG_State_ext.
+  - reflexivity.
+  - apply act_id.
+  - simpl.
+    rewrite map_id.
+    + apply sorted_list_eq.
+      * apply insertion_sort_sorts.
+      * apply s.
+      * apply insertion_sort_In.
+      * apply insertion_sort_NoDup; apply s.
+      * apply s.
+    + intro; apply act_id.
+Qed.
+
+Definition BearMv_act {G} {H} `{GroupAction G H}
+  (x : carrier H) (s : BG_State G) (m : BearMv s) :
+  BearMv (BG_State_act x s).
+Proof.
+  unshelve econstructor.
+  - exact (x # (b_dest m)).
+  - apply act_edge.
+    apply m.
+  - simpl; intro pf.
+    apply (b_dest_empty m).
+    rewrite insertion_sort_In in pf.
+    rewrite in_map_iff in pf.
+    destruct pf as [v [Hv1 Hv2]].
+    apply act_inj in Hv1; congruence.
+Defined.
+
+Definition HunterMv_act {G} {H} `{GroupAction G H}
+  (x : carrier H) (s : BG_State G) (m : HunterMv s) :
+  HunterMv (BG_State_act x s).
+Proof.
+  unshelve econstructor.
+  - exact (x # (h_orig m)).
+  - exact (x # (h_dest m)).
+  - simpl hunters.
+    rewrite insertion_sort_In.
+    rewrite in_map_iff.
+    exists (h_orig m); split; auto.
+    apply m.
+  - apply act_edge.
+    apply m.
+  - simpl; intro pf.
+    apply m.
+    apply act_inj with (x := x); auto.
+  - simpl; intro pf.
+    rewrite insertion_sort_In in pf.
+    rewrite in_map_iff in pf.
+    destruct pf as [v [Hv1 Hv2]].
+    apply act_inj in Hv1; subst.
+    f_equal.
+    apply m; auto.
+Defined.
+
+Definition BG_Move_act {G} {H} `{GroupAction G H}
+  (x : carrier H) (s : BG_State G) (m : BG_Move s) :
+  BG_Move (BG_State_act x s).
+Proof.
+  destruct m.
+  - apply BearMove.
+    + auto.
+    + apply BearMv_act; auto.
+  - apply HunterMove.
+    + auto.
+    + apply HunterMv_act; auto.
+Defined.
+
+Lemma BG_Move_act_exec {G} {H} `{GroupAction G H}
+  (x : carrier H) (s : BG_State G) (m : BG_Move s) :
+  BG_State_act x (exec_move m) =
+  exec_move (BG_Move_act x s m).
+Proof.
+  apply BG_State_ext.
+  - destruct m; reflexivity.
+  - destruct m; reflexivity.
+  - destruct m; simpl.
+    + reflexivity.
+    + apply sorted_list_eq.
+      * apply insertion_sort_sorts.
+      * apply insert_sorted.
+        apply insertion_sort_sorts.
+      * intro v.
+        rewrite insert_In.
+        repeat rewrite insertion_sort_In.
+        rewrite In_remove_iff.
+        rewrite insertion_sort_In.
+        repeat rewrite in_map_iff.
+        split; intro pf.
+        -- destruct pf as [v' [Hv'1 Hv'2]].
+           rewrite insert_In in Hv'2.
+           destruct Hv'2.
+           ++ left; congruence.
+           ++ right.
+              rewrite insertion_sort_In in H1.
+              rewrite In_remove_iff in H1.
+              destruct H1; split.
+              ** intro pf; apply H1.
+                 rewrite pf in Hv'1.
+                 now apply act_inj in Hv'1.
+              ** exists ((inv x) # v).
+                 rewrite <- Hv'1 at 3.
+                 repeat rewrite <- act_comp.
+                 rewrite inv_left, inv_right.
+                 repeat rewrite act_id; now split.
+        -- exists ((inv x) # v); split.
+           ++ rewrite <- act_comp.
+              rewrite inv_right; now apply act_id.
+           ++ rewrite insert_In.
+              destruct pf.
+              ** left; rewrite <- H1.
+                 rewrite <- act_comp.
+                 rewrite inv_left; now rewrite act_id.
+              ** right.
+                 rewrite insertion_sort_In.
+                 destruct H1 as [pf [v' [Hv'1 Hv'2]]].
+                 rewrite In_remove_iff; split.
+                 --- intro; apply pf.
+                     rewrite <- H1.
+                     rewrite <- act_comp.
+                     rewrite inv_right; now rewrite act_id.
+                 --- rewrite <- Hv'1.
+                     rewrite <- act_comp.
+                     rewrite inv_left.
+                     now rewrite act_id.
+      * apply insertion_sort_NoDup.
+        apply FinFun.Injective_map_NoDup.
+        -- cbv; apply act_inj.
+        -- apply insert_NoDup.
+           ++ apply insertion_sort_NoDup.
+              apply NoDup_remove.
+              apply s.
+           ++ rewrite insertion_sort_In.
+              rewrite In_remove_iff.
+              intros [pf1 pf2].
+              apply pf1.
+              now apply h.
+      * apply insert_NoDup.
+        -- apply insertion_sort_NoDup.
+           apply NoDup_remove.
+           apply insertion_sort_NoDup.
+           apply FinFun.Injective_map_NoDup.
+           ++ cbv; apply act_inj.
+           ++ apply s.
+        -- rewrite insertion_sort_In.
+           rewrite In_remove_iff.
+           intros [pf1 pf2].
+           apply pf1.
+           f_equal; apply h.
+           rewrite insertion_sort_In in pf2.
+           rewrite in_map_iff in pf2.
+           destruct pf2 as [v [Hv1 Hv2]].
+           apply act_inj in Hv1.
+           congruence.
+Qed.
+
+Lemma flip_BG_State_act {G} {H} `{GroupAction G H} x s s' :
+  BG_State_act x s = s' ->
+  BG_State_act (inv x) s' = s.
+Proof.
+  intro pf.
+  apply f_equal with (f := BG_State_act (inv x)) in pf.
+  rewrite <- BG_State_act_comp in pf.
+  rewrite inv_left in pf.
+  now rewrite BG_State_act_id in pf.
+Qed.
+
+Definition Bear_Bisim {G} {H} `{GroupAction G H} :
+  InvertibleBisim (BearGame G) (BearGame G).
+Proof.
+  unshelve econstructor.
+  - exact (fun s s' => { x : carrier H & BG_State_act x s = s' }).
+  - simpl.
+    intros s s' [x Hx] m.
+    rewrite <- Hx.
+    apply BG_Move_act.
+    exact m.
+  - simpl; intros s s' [x Hx] m.
+    destruct m.
+    + apply BearMove.
+      * rewrite <- Hx in e; auto.
+      * unshelve econstructor.
+        -- exact (act (inv x) (b_dest b)).
+        -- apply flip_BG_State_act in Hx; rewrite <- Hx.
+           apply act_edge.
+           apply b.
+        -- apply flip_BG_State_act in Hx; rewrite <- Hx.
+           simpl hunters.
+           rewrite insertion_sort_In.
+           rewrite in_map_iff.
+           intros [v [Hv1 Hv2]].
+           apply (b_dest_empty b).
+           apply act_inj in Hv1; congruence.
+    + apply HunterMove.
+      * rewrite <- Hx in e; auto.
+      * unshelve econstructor.
+        -- exact (act (inv x) (h_orig h)).
+        -- exact (act (inv x) (h_dest h)).
+        -- apply flip_BG_State_act in Hx; rewrite <- Hx.
+           simpl hunters.
+           rewrite insertion_sort_In.
+           rewrite in_map_iff.
+           exists (h_orig h); split; auto.
+           apply h.
+        -- apply act_edge.
+           apply h.
+        -- apply flip_BG_State_act in Hx; rewrite <- Hx.
+           intro pf.
+           apply act_inj in pf.
+           now apply h.
+        -- apply flip_BG_State_act in Hx; rewrite <- Hx.
+           simpl; intro pf.
+           rewrite insertion_sort_In in pf.
+           rewrite in_map_iff in pf.
+           destruct pf as [v [Hv1 Hv2]].
+           apply act_inj in Hv1.
+           f_equal.
+           apply h; congruence.
+  - simpl; intros s m s' [x Hx].
+    exists (BG_State_act x s).
+    apply BG_Move_act.
+    exact m.
+  - simpl; intros s m s' [x Hx].
+    exists (BG_State_act (inv x) s).
+    apply BG_Move_act.
+    exact m.
+  - simpl; intros s s' [x Hx].
+    rewrite <- Hx; auto.
+  - intros s s' [x Hx]; simpl.
+    unfold atomic_res.
+    rewrite <- Hx.
+    simpl.
+    destruct (to_play s).
+    + destruct (enum_moves s) eqn:?.
+      * destruct (enum_moves (BG_State_act x s)); auto.
+        apply BG_Move_act with (x := inv x) in b.
+        rewrite <- BG_State_act_comp in b.
+        rewrite inv_left in b.
+        rewrite BG_State_act_id in b.
+        pose proof (@enum_all (BearGame G) s b).
+        simpl in H1.
+        rewrite Heql in H1.
+        destruct H1.
+      * destruct (enum_moves (BG_State_act x s)) eqn:?; auto.
+        clear Heql.
+        apply BG_Move_act with (x := x) in b.
+        pose proof (@enum_all (BearGame G) (BG_State_act x s) b).
+        simpl in H1.
+        rewrite Heql0 in H1.
+        destruct H1.
+    + destruct (enum_moves s) eqn:?.
+      * destruct (enum_moves (BG_State_act x s)); auto.
+        apply BG_Move_act with (x := inv x) in b.
+        rewrite <- BG_State_act_comp in b.
+        rewrite inv_left in b.
+        rewrite BG_State_act_id in b.
+        pose proof (@enum_all (BearGame G) s b).
+        simpl in H1.
+        rewrite Heql in H1.
+        destruct H1.
+      * destruct (enum_moves (BG_State_act x s)) eqn:?; auto.
+        clear Heql.
+        apply BG_Move_act with (x := x) in b.
+        pose proof (@enum_all (BearGame G) (BG_State_act x s) b).
+        simpl in H1.
+        rewrite Heql0 in H1.
+        destruct H1.
+  - simpl; intros s s' m [x Hx].
+    destruct Hx; simpl.
+    exists x.
+    apply BG_Move_act_exec.
+  - simpl; intros s s' m [x Hx].
+    exists x.
+    destruct Hx.
+    simpl.
+    apply BG_State_ext.
+    + destruct m; reflexivity.
+    + destruct m; simpl; auto.
+      rewrite <- act_comp.
+      rewrite inv_right.
+      apply act_id.
+    + destruct m; simpl; auto.
+      apply sorted_list_eq.
+      * apply insertion_sort_sorts.
+      * apply insert_sorted.
+        apply insertion_sort_sorts.
+      * intro v.
+        rewrite insert_In.
+        repeat rewrite insertion_sort_In.
+        rewrite In_remove_iff.
+        rewrite insertion_sort_In.
+        repeat rewrite in_map_iff.
+        split; intro pf.
+        -- destruct pf as [v' [Hv'1 Hv'2]].
+           rewrite insert_In in Hv'2.
+           destruct Hv'2.
+           ++ left. apply f_equal with (f := act x) in H1.
+              rewrite <- act_comp in H1.
+              rewrite inv_right in H1.
+              rewrite act_id in H1; congruence.
+           ++ rewrite insertion_sort_In in H1.
+              rewrite In_remove_iff in H1; destruct H1.
+              right; split.
+              ** intro pf; apply H1.
+                 rewrite <- pf.
+                 rewrite <- Hv'1.
+                 rewrite <- act_comp.
+                 rewrite inv_left.
+                 now rewrite act_id.
+              ** exists v'; split; auto.
+        -- exists ((inv x) # v); split.
+           ++ rewrite <- act_comp.
+              rewrite inv_right.
+              apply act_id.
+           ++ rewrite insert_In.
+              destruct pf.
+              ** left; congruence.
+              ** destruct H1; right; rewrite insertion_sort_In.
+                 rewrite In_remove_iff; split.
+                 --- intro; apply H1.
+                     now apply act_inj in H3.
+                 --- destruct H2 as [v' [Hv'1 Hv'2]].
+                     rewrite <- Hv'1.
+                     rewrite <- act_comp.
+                     rewrite inv_left.
+                     now rewrite act_id.
+      * apply insertion_sort_NoDup.
+        apply FinFun.Injective_map_NoDup.
+        -- cbv; apply act_inj.
+        -- apply insert_NoDup.
+           ++ apply insertion_sort_NoDup.
+              apply NoDup_remove.
+              apply s.
+           ++ rewrite insertion_sort_In.
+              rewrite In_remove_iff.
+              intros [pf1 pf2].
+              apply pf1.
+              f_equal.
+              apply h; simpl.
+              rewrite insertion_sort_In.
+              rewrite in_map_iff.
+              exists ((inv x) # (h_dest h)); split; auto.
+              rewrite <- act_comp.
+              rewrite inv_right.
+              apply act_id.
+      * apply insert_NoDup.
+        -- apply insertion_sort_NoDup.
+           apply NoDup_remove.
+           apply insertion_sort_NoDup.
+           apply FinFun.Injective_map_NoDup.
+           ++ cbv; apply act_inj.
+           ++ apply s.
+        -- rewrite insertion_sort_In.
+           rewrite In_remove_iff.
+           intros [pf1 pf2].
+           apply pf1.
+           apply h; auto.
+  - simpl; intros s s' m [x Hx].
+    destruct Hx; simpl.
+    destruct m; simpl.
+    + f_equal.
+      apply BearMv_ext.
+      simpl.
+      rewrite <- act_comp.
+      rewrite inv_right.
+      apply act_id.
+    + f_equal.
+      apply HunterMv_ext.
+      * simpl.
+        rewrite <- act_comp.
+        rewrite inv_right.
+        apply act_id.
+      * simpl.
+        rewrite <- act_comp.
+        rewrite inv_right.
+        apply act_id.
+  - intros s s' m [x Hx]; simpl.
+    destruct Hx; simpl.
+    destruct m; simpl.
+    + f_equal.
+      apply BearMv_ext; simpl.
+      rewrite <- act_comp.
+      rewrite inv_left.
+      apply act_id.
+    + f_equal.
+      apply HunterMv_ext; simpl.
+      * rewrite <- act_comp.
+        rewrite inv_left.
+        apply act_id.
+      * rewrite <- act_comp.
+        rewrite inv_left.
+        apply act_id.
+  - intros s m s' [x Hx].
+    simpl in *.
+    rewrite BG_Move_act_exec in Hx.
+    auto.
+  - intros s m s' [x Hx].
+    exists x; reflexivity.
+  - intros s m s' [x Hx].
+    simpl in *.
+    rewrite <- BG_Move_act_exec.
+    rewrite <- Hx.
+    rewrite <- BG_State_act_comp.
+    rewrite inv_left.
+    apply BG_State_act_id.
+  - intros s m s' [x Hx].
+    exists x; simpl.
+    rewrite <- BG_State_act_comp.
+    rewrite inv_right.
+    apply BG_State_act_id.
+Defined.
+
+Class OrbitSelector G H `{GroupAction G H} : Type := {
+  select : GameState (BearGame G) -> GameState (BearGame G);
+  select_act : forall s, { x : carrier H & BG_State_act x s = select s };
+  select_functional : forall s x, select (BG_State_act x s) = select s;
+  }.
+
+Global Instance Bear_Sym {G} {H} `{OrbitSelector G H} : Symmetry (BearGame G).
+Proof.
+  unshelve econstructor.
+  - exact Bear_Bisim.
+  - exact select.
+  - intro s; exists id.
+    apply BG_State_act_id.
+  - intros s s' [x Hx].
+    exists (inv x).
+    rewrite <- Hx.
+    rewrite <- BG_State_act_comp.
+    rewrite inv_left.
+    apply BG_State_act_id.
+  - intros s1 s2 s3 [x Hx] [y Hy].
+    exists (y ** x).
+    rewrite BG_State_act_comp.
+    congruence.
+  - apply select_act.
+  - intros s s' [x Hx].
+    rewrite <- Hx.
+    symmetry; apply select_functional.
+Defined.
+
+Definition Bear_TB (G : Graph) (H : Group) `{OrbitSelector G H} `{hsh : IntHash (GameState (BearGame G))}
   : OCamlTablebase (BearGame G) := certified_TB.

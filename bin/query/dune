@@ -3,20 +3,25 @@
   (extracted_modules
     Ascii
     BearGame
+    Bisim
     Compare_dec
     Datatypes
     Dec
     ExtractQuery
     Game
     Graph
+    GroupAction
     IntHash
     IntMap
     List0
+    Nat
     OCamlTB
     OMap
+    PeanoNat
     Player
     PrimInt63
     RomanWheel
+    RomanWheelSym
     Show
     Sort
     Specif
@@ -36,20 +41,25 @@
     ;; Extracted code
     Ascii
     BearGame
+    Bisim
     Compare_dec
     Datatypes
     Dec
     ExtractQuery
     Game
     Graph
+    GroupAction
     IntHash
     IntMap
     List0
+    Nat
     OCamlTB
     OMap
+    PeanoNat
     Player
     PrimInt63
     RomanWheel
+    RomanWheelSym
     Show
     Sort
     Specif

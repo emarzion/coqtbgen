@@ -29,4 +29,4 @@
 (rule
   (targets tb_w.json tb_b.json)
   (deps gen_file.exe)
-  (action (run ./gen_file.exe)))
+  (action (run time ./gen_file.exe)))
