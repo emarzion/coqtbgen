@@ -18,16 +18,25 @@ Require Import TBGen.Util.IntHash.
 Require Import Games.Util.Dec.
 Require Import TBGen.Util.Loop.
 Require Import TBGen.Util.ListUtil.
+Require Import TBGen.StratSymTB.Stratification.
 
-Class FinGame (G : Game) : Type := {
-  enum_states : list (GameState G);
-  enum_wins : Player -> list (GameState G);
+Print Stratification.
 
-  enum_states_correct : forall s, In s enum_states;
-  enum_wins_correct1 : forall s pl,
-    In s (enum_wins pl) -> atomic_res s = Some (Win pl);
-  enum_wins_correct2 : forall s pl,
-    atomic_res s = Some (Win pl) -> In s (enum_wins pl)
+Class FinStratGame {I : FinBranchWFOrd} (G : Game)
+  (S : Stratification I G) : Type := {
+  enum_states : I -> list (GameState G);
+  enum_wins : I -> Player -> list (GameState G);
+  enum_states_correct1 : forall (i : I) s,
+    index I G S s = i -> In s (enum_states i);
+  enum_states_correct2 : forall i s,
+    In s (enum_states i) -> index I G S s = i;
+  enum_wins_correct1 : forall i s pl,
+    In s (enum_wins i pl) -> atomic_res s = Some (Win pl);
+  enum_wins_correct2 : forall i s pl,
+    index I G S s = i ->
+    atomic_res s = Some (Win pl) -> In s (enum_wins i pl);
+  enum_wins_correct3 : forall i s pl,
+    In s (enum_wins i pl) -> index I G S s = i;
   }.
 
 Class NiceGame (G : Game) : Prop := {
@@ -58,7 +67,10 @@ Class Symmetry (G : Game) : Type := {
 Section TB.
 
 Context {G : Game}.
-Context `{FinGame G}.
+Context {I : FinBranchWFOrd}.
+Context {S : Stratification I G}.
+Context `{IntHash I}.
+Context `{FinStratGame I G S}.
 Context `{NiceGame G}.
 Context `{Reversible G}.
 Context `{IntHash (GameState G)}.
@@ -68,27 +80,30 @@ Context `{Symmetry G}.
 Context {M : Type -> Type}.
 Context `{IntMap M}.
 
-Definition enum_norm_wins pl : list (GameState G) :=
-  nodup IntHash_dec (map normalize (enum_wins pl)).
+Definition enum_norm_wins i pl : list (GameState G) :=
+  nodup IntHash_dec (map normalize (enum_wins i pl)).
 
-Lemma enum_norm_wins_correct1 : forall s pl,
-  In s (enum_norm_wins pl) -> exists s',
-    normalize s' = s /\ atomic_res s' = Some (Win pl).
+Lemma enum_norm_wins_correct1 : forall i s pl,
+  In s (enum_norm_wins i pl) -> exists s',
+    normalize s' = s /\ atomic_res s' = Some (Win pl) /\ index I G S s' = i.
 Proof.
   unfold enum_norm_wins.
-  intros s pl pf.
+  intros i s pl pf.
   rewrite nodup_In in pf.
   rewrite in_map_iff in pf.
   destruct pf as [s' [Hs'1 Hs'2]].
   exists s'; split; auto.
-  apply enum_wins_correct1; auto.
+  split.
+  - eapply enum_wins_correct1; eauto.
+  - eapply enum_wins_correct3; eauto.
 Qed.
 
-Lemma enum_norm_wins_correct2 : forall s pl,
-  atomic_res s = Some (Win pl) -> In (normalize s) (enum_norm_wins pl).
+Lemma enum_norm_wins_correct2 : forall i s pl,
+  atomic_res s = Some (Win pl) -> index I G S s = i ->
+  In (normalize s) (enum_norm_wins i pl).
 Proof.
   unfold enum_norm_wins.
-  intros s pl pf.
+  intros i s pl pf1 pf2.
   rewrite nodup_In.
   rewrite in_map_iff.
   exists s; split; auto.
@@ -169,31 +184,51 @@ Definition step_player : Step -> Player -> Player :=
     | Abelard => opp
     end.
 
-Record TB : Type := {
+Record TB (jobs : list I) : Type := {
   curr : nat;
   last_step : Step;
 
-  white_positions : M (Player * nat);
-  black_positions : M (Player * nat);
+  white_positions : M (M (Player * nat));
+  black_positions : M (M (Player * nat));
 
-  last_white_positions : list (GameState G);
-  last_black_positions : list (GameState G)
+  last_white_positions : M (list (GameState G));
+  last_black_positions : M (list (GameState G))
   }.
 
-Definition tb_lookup (tb : TB) (s : GameState G) : option (Player * nat) :=
+Arguments curr {_} _.
+Arguments last_step {_} _.
+Arguments white_positions {_} _.
+Arguments black_positions {_} _.
+Arguments last_white_positions {_} _.
+Arguments last_black_positions {_} _.
+
+Definition tb_lookup {jobs} (tb : TB jobs) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => hash_lookup (normalize s) (white_positions tb)
-  | Black => hash_lookup (normalize s) (black_positions tb)
+  | White =>
+    match hash_lookup (index I G S s) (white_positions tb) with
+    | Some m => hash_lookup (normalize s) m
+    | None => None
+    end
+  | Black =>
+    match hash_lookup (index I G S s) (black_positions tb) with
+    | Some m => hash_lookup (normalize s) m
+    | None => None
+    end
   end.
 
 Definition tag (winner : Player) (n : nat) (s : GameState G) :=
   (s, (winner, n)).
 
+Search M.
+Print IntMap.
+
+///asdfasf(*here *)
+
 Definition add_positions (m : M (Player * nat)) (winner : Player) (n : nat)
   (ps : list (GameState G)) : M (Player * nat) :=
   hash_adds (map (tag winner n) ps) m.
 
-Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
+Definition eloise_step {jobs} (tb : TB jobs) (pl : Player) : list (GameState G) :=
   let prev :=
     match pl with
     | White => last_black_positions tb
