@@ -10,9 +10,9 @@ license: "GPL"
 synopsis: "Games library and Tablebase generator"
 
 build: [
-  [dune build]
+  ["dune" "build" "-p" name]
 ]
-install: [dune install]
+install: ["dune" "install" "-p" name]
 
 depends: [
   "ocaml" {>= "4.14.0"}
