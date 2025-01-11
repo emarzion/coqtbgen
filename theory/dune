@@ -1,4 +1,5 @@
 (include_subdirs qualified)
 (coq.theory
  (name TBGen)
- (theories Games))
+ (theories Games)
+ (package coqtbgen))
