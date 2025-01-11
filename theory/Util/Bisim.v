@@ -8,24 +8,6 @@ Require Import Games.Game.NoWorse.
 
 Require Import TBGen.Util.ListUtil.
 
-(*
-Definition inv_forward s m s' :
-  bisim G G auto (exec_move s m) s' ->
-  { s'' : GameState G & Move s'' }.
-Proof.
-  intro pf.
-
-Admitted.
-
-Lemma inv_forward_correct s m s' (b : bisim G G auto (exec_move s m) s') :
-  exec_move (projT1 (inv_forward s m s' b)) (projT2 (inv_forward s m s' b)) = s'.
-Admitted.
-
-Lemma exec_inv_forward s m s' (b : bisim G G auto (exec_move s m) s') :
-  bisim G G auto s (projT1 (inv_forward s m s' b)).
-Admitted.
-*)
-
 Record InvertibleBisim (G H : Game) : Type := {
   bisim : GameState G -> GameState H -> Type;
 
