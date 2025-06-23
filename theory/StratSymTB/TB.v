@@ -20,6 +20,75 @@ Require Import TBGen.Util.Loop.
 Require Import TBGen.Util.ListUtil.
 Require Import TBGen.StratSymTB.Closed.
 
+Fixpoint cond_in_dec {X} (P : X -> Prop)
+  (dec : forall x x', P x -> P x' -> {x = x'} + {x <> x'}) (x : X) (px : P x) (xs : list X) (pxs : Forall P xs) :
+  {In x xs} + {~ In x xs}.
+Proof.
+  destruct xs.
+  - right; tauto.
+  - destruct (dec x x0 px (Forall_inv pxs)).
+    + left; left; auto.
+    + destruct (cond_in_dec X P dec x px xs (Forall_inv_tail pxs)).
+      * left; right; auto.
+      * right; intros [|]; congruence.
+Defined.
+
+Fixpoint cond_nodup {X} {P} (dec : forall x x' : X,
+  P x -> P x' -> {x = x'} + {x <> x'}) (xs : list X) (P_xs : Forall P xs) :
+  list X.
+Proof.
+  destruct xs as [|x xs'].
+  - exact [].
+  - destruct (cond_in_dec P dec x (Forall_inv P_xs) xs' (Forall_inv_tail P_xs)).
+    + exact (cond_nodup X P dec xs' (Forall_inv_tail P_xs)).
+    + exact (x :: cond_nodup X P dec xs' (Forall_inv_tail P_xs)).
+Defined.
+
+Lemma cond_nodup_In {X} {P} (dec : forall x x' : X,
+  P x -> P x' -> {x = x'} + {x <> x'}) (xs : list X)
+  (P_xs : Forall P xs) (x : X) :
+  In x (cond_nodup dec xs P_xs) <-> In x xs.
+Proof.
+  split; intro pf.
+  - induction xs as [|x' xs'].
+    + destruct pf.
+    + simpl in pf.
+      destruct cond_in_dec.
+      * right.
+        eapply IHxs'; eauto.
+      * destruct pf.
+        -- left; auto.
+        -- right; eapply IHxs'; eauto.
+  - induction xs as [|x' xs'].
+    + destruct pf.
+    + simpl.
+      destruct cond_in_dec.
+      * destruct pf.
+        -- subst.
+           apply IHxs'; auto.
+        -- apply IHxs'; auto.
+      * destruct pf.
+        -- left; auto.
+        -- right; apply IHxs'; auto.
+Qed.
+
+Lemma NoDup_cond_nodup {X} {P} (dec : forall x x' : X,
+  P x -> P x' -> {x = x'} + {x <> x'}) (xs : list X)
+  (P_xs : Forall P xs) :
+  NoDup (cond_nodup dec xs P_xs).
+Proof.
+  induction xs as [|x xs'].
+  - constructor.
+  - simpl.
+    destruct cond_in_dec.
+    + apply IHxs'.
+    + constructor.
+      * intro pf.
+        rewrite cond_nodup_In in pf.
+        contradiction.
+      * apply IHxs'.
+Qed.
+
 Class FinPred {G} (P : GameState G -> Prop) : Type := {
   enum_states : list (GameState G);
   enum_P_wins : Player -> list (GameState G);
@@ -27,8 +96,9 @@ Class FinPred {G} (P : GameState G -> Prop) : Type := {
   enum_states_correct : forall s, In s enum_states;
   enum_P_wins_correct1 : forall s pl,
     In s (enum_P_wins pl) -> atomic_res s = Some (Win pl);
-  enum_wins_correct2 : forall s pl,
-    atomic_res s = Some (Win pl) -> P s -> In s (enum_P_wins pl)
+  enum_P_wins_correct2 : forall s pl,
+    atomic_res s = Some (Win pl) -> P s -> In s (enum_P_wins pl);
+  enum_P_wins_correct3 : forall pl, Forall P (enum_P_wins pl)
   }.
 
 Class NiceGame (G : Game) : Prop := {
@@ -61,9 +131,9 @@ Section TB.
 Context {G : Game}.
 Context `{NiceGame G}.
 Context `{Reversible G}.
-Context `{IntHash (GameState G)}.
 Context `{forall s : GameState G, Discrete (Move s)}.
 Context `{Symmetry G}.
+Context `{Discrete (GameState G)}.
 
 Context {M : Type -> Type}.
 Context `{IntMap M}.
@@ -73,6 +143,8 @@ Context `{FinPred G P}.
 Context `{Closed G P}.
 Context `{Bisim_closed G auto P}.
 Context `{Pd : Dec1 _ P}.
+
+Context `{CondIntHash (GameState G) P}.
 
 Lemma P_to_Pnorm : forall s, P s -> P (normalize s).
 Proof.
@@ -89,8 +161,26 @@ Proof.
   apply normalize_bisim.
 Qed.
 
+Lemma enum_P_P pl :
+  Forall P (enum_P_wins pl).
+Proof.
+  apply H5.
+Qed.
+
+Lemma norm_enum_P_P pl :
+  Forall P (map normalize (enum_P_wins pl)).
+Proof.
+  rewrite Forall_map.
+  apply Forall_impl with (P := P).
+  - apply P_to_Pnorm.
+  - apply enum_P_P.
+Qed.
+
 Definition enum_norm_wins pl : list (GameState G) :=
-  nodup IntHash_dec (map normalize (enum_P_wins pl)).
+  cond_nodup
+    CondIntHash_dec
+    (map normalize (enum_P_wins pl))
+    (norm_enum_P_P pl).
 
 Lemma enum_norm_wins_correct1 : forall s pl,
   In s (enum_norm_wins pl) -> exists s',
@@ -98,7 +188,7 @@ Lemma enum_norm_wins_correct1 : forall s pl,
 Proof.
   unfold enum_norm_wins.
   intros s pl pf.
-  rewrite nodup_In in pf.
+  rewrite cond_nodup_In in pf.
   rewrite in_map_iff in pf.
   destruct pf as [s' [Hs'1 Hs'2]].
   exists s'; split; auto.
@@ -110,10 +200,10 @@ Lemma enum_norm_wins_correct2 : forall s pl, P s ->
 Proof.
   unfold enum_norm_wins.
   intros s pl pf1 pf2.
-  rewrite nodup_In.
+  rewrite cond_nodup_In.
   rewrite in_map_iff.
   exists s; split; auto.
-  apply enum_wins_correct2; auto.
+  apply enum_P_wins_correct2; auto.
 Qed.
 
 Definition win_to_normal_win : forall s pl,
@@ -203,8 +293,8 @@ Record TB : Type := {
 
 Definition tb_lookup (tb : TB) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => hash_lookup (normalize s) (white_positions tb)
-  | Black => hash_lookup (normalize s) (black_positions tb)
+  | White => chash_lookup (normalize s) (white_positions tb)
+  | Black => chash_lookup (normalize s) (black_positions tb)
   end.
 
 Definition tag (winner : Player) (n : nat) (s : GameState G) :=
@@ -212,9 +302,10 @@ Definition tag (winner : Player) (n : nat) (s : GameState G) :=
 
 Definition add_positions (m : M (Player * nat)) (winner : Player) (n : nat)
   (ps : list (GameState G)) : M (Player * nat) :=
-  hash_adds (map (tag winner n) ps) m.
+  chash_adds (map (tag winner n) ps) m.
 
-Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
+Definition eloise_step (tb : TB) (pl : Player) : list (GameState G).
+  refine (
   let prev :=
     match pl with
     | White => last_black_positions tb
@@ -237,10 +328,18 @@ Definition eloise_step (tb : TB) (pl : Player) : list (GameState G) :=
     end in
   let candidates := map normalize (concat (map enum_preds prev)) in
   let candidates' :=
-    filter_dec P (filter_Nones (fun s => hash_lookup s m) candidates) in
-  nodup IntHash_dec candidates'.
+    filter_dec P (filter_Nones (fun s => chash_lookup s m) candidates) in
+  cond_nodup CondIntHash_dec candidates' _).
+Proof.
+  unfold candidates'.
+  apply Forall_forall.
+  intros.
+  apply filter_dec_In in H9.
+  tauto.
+Defined.
 
-Definition abelard_step (tb : TB) (pl : Player) : list (GameState G) :=
+Definition abelard_step (tb : TB) (pl : Player) : list (GameState G).
+  refine (
   let prev :=
     match pl with
     | White => last_black_positions tb
@@ -278,25 +377,59 @@ Definition abelard_step (tb : TB) (pl : Player) : list (GameState G) :=
     end in
   let candidates := map normalize (concat (map enum_preds prev)) in
   let candidates' :=
-    filter_dec P (filter_Nones (fun s => hash_lookup s m) candidates) in
+    filter_dec P (filter_Nones (fun s => chash_lookup s m) candidates) in
   let candidates'' := filter
     (fun s => forallb (fun m =>
-      match hash_lookup (normalize (exec_move s m)) m' with
+      match chash_lookup (normalize (exec_move s m)) m' with
       | Some (pl',_) => player_eqb (opp pl) pl'
       | None => false
       end) (enum_moves s)) candidates' in
-  nodup IntHash_dec candidates''.
+  cond_nodup CondIntHash_dec candidates'' _).
+Proof.
+  unfold candidates''.
+  apply incl_Forall with (l1 := candidates').
+  - apply incl_filter.
+  - unfold candidates'.
+  apply Forall_forall.
+  intros.
+  apply filter_dec_In in H9.
+  tauto.
+Defined.
 
-Definition TB_init : TB := {|
+Definition TB_init : TB. refine {|
   curr := 0;
   last_step := Abelard;
 
   white_positions := empty;
   black_positions := empty;
 
-  last_white_positions := nodup IntHash_dec (enum_norm_wins Black);
-  last_black_positions := nodup IntHash_dec (enum_norm_wins White);
+  last_white_positions := cond_nodup CondIntHash_dec (enum_norm_wins Black) _;
+  last_black_positions := cond_nodup CondIntHash_dec (enum_norm_wins White) _;
   |}.
+Proof.
+  - rewrite Forall_forall; intros s Hs.
+    unfold enum_norm_wins in Hs.
+    rewrite cond_nodup_In in Hs.
+    rewrite in_map_iff in Hs.
+    destruct Hs as [s' [Hs'1 Hs'2]].
+    apply bisim_closed with (s := s').
+    + pose proof (enum_P_P Black) as pf.
+      rewrite Forall_forall in pf.
+      apply pf; auto.
+    + rewrite <- Hs'1.
+      apply normalize_bisim.
+  - rewrite Forall_forall; intros s Hs.
+    unfold enum_norm_wins in Hs.
+    rewrite cond_nodup_In in Hs.
+    rewrite in_map_iff in Hs.
+    destruct Hs as [s' [Hs'1 Hs'2]].
+    apply bisim_closed with (s := s').
+    + pose proof (enum_P_P White) as pf.
+      rewrite Forall_forall in pf.
+      apply pf; auto.
+    + rewrite <- Hs'1.
+      apply normalize_bisim.
+Defined.
 
 Definition TB_step (tb : TB) : TB := {|
   curr := S (curr tb);
@@ -336,10 +469,10 @@ Proof.
   unfold num_left.
   intros []; simpl.
   unfold add_positions.
-  pose proof (hash_size_adds_le
+  pose proof (chash_size_adds_le
     (map (tag (step_player last_step0 White) curr0) last_white_positions0)
     white_positions0).
-  pose proof (hash_size_adds_le
+  pose proof (chash_size_adds_le
     (map (tag (step_player last_step0 Black) curr0) last_black_positions0)
     black_positions0).
   lia.
@@ -356,14 +489,16 @@ Definition TB_final : TB :=
 
 Record TB_valid (tb : TB) : Type := {
 
-  white_good : good (white_positions tb);
-  black_good : good (black_positions tb);
+  white_good : cgood (white_positions tb);
+  black_good : cgood (black_positions tb);
 
   mate_tb : forall {s pl n},
     P s -> n < curr tb -> mate pl s n ->
     tb_lookup tb s = Some (pl, n);
 
+
   tb_mate : forall {s pl n},
+    P s ->
     tb_lookup tb s = Some (pl, n) ->
     mate pl s n;
 
@@ -372,11 +507,13 @@ Record TB_valid (tb : TB) : Type := {
     n < curr tb;
 
   tb_white : forall {s pl n},
-    hash_lookup s (white_positions tb) = Some (pl, n) ->
+    P s ->
+    chash_lookup s (white_positions tb) = Some (pl, n) ->
     to_play s = White;
 
   tb_black : forall {s pl n},
-    hash_lookup s (black_positions tb) = Some (pl, n) ->
+    P s  ->
+    chash_lookup s (black_positions tb) = Some (pl, n) ->
     to_play s = Black;
 
   tb_None : forall {s pl} (w : win pl s), P s ->
@@ -405,9 +542,9 @@ Record TB_valid (tb : TB) : Type := {
 
   lbp_NoDup : NoDup (last_black_positions tb);
 
-  lwp_disj : forall s, In s (last_white_positions tb) -> hash_lookup s (white_positions tb) = None;
+  lwp_disj : forall s, In s (last_white_positions tb) -> chash_lookup s (white_positions tb) = None;
 
-  lbp_disj : forall s, In s (last_black_positions tb) -> hash_lookup s (black_positions tb) = None;
+  lbp_disj : forall s, In s (last_black_positions tb) -> chash_lookup s (black_positions tb) = None;
 
   lwp_white : forall s, In s (last_white_positions tb) -> to_play s = White;
 
@@ -471,27 +608,27 @@ Proof.
   - constructor.
   - simpl.
     intros; lia.
+  - intros s pl n p Htb.
+    unfold tb_lookup, TB_init in Htb; simpl in Htb.
+    destruct (to_play s);
+    now rewrite chash_lookup_empty in Htb.
   - intros s pl n Htb.
     unfold tb_lookup, TB_init in Htb; simpl in Htb.
     destruct (to_play s);
-    now rewrite hash_lookup_empty in Htb.
-  - intros s pl n Htb.
-    unfold tb_lookup, TB_init in Htb; simpl in Htb.
-    destruct (to_play s);
-    now rewrite hash_lookup_empty in Htb.
-  - intros s pl n Htb; simpl in Htb.
-    now rewrite hash_lookup_empty in Htb.
-  - intros s pl n Htb; simpl in Htb.
-    now rewrite hash_lookup_empty in Htb.
+    now rewrite chash_lookup_empty in Htb.
+  - intros s pl n p Htb; simpl in Htb.
+    now rewrite chash_lookup_empty in Htb.
+  - intros s pl n p Htb; simpl in Htb.
+    now rewrite chash_lookup_empty in Htb.
   - intros; simpl; lia.
   - intros s pl s_p s_play [w [w_d _]].
     destruct w; simpl in *; try lia.
     rewrite (atomic_win_opp _ _ e) in s_play.
     assert (pl = Black) as s_pl by (now apply opp_inj).
-    rewrite nodup_In.
+    rewrite cond_nodup_In.
     apply enum_norm_wins_correct2; congruence.
   - intros s HIn; simpl in *.
-    rewrite nodup_In in HIn.
+    rewrite cond_nodup_In in HIn.
     assert (atomic_res s = Some (Win Black)) as s_res.
     { destruct (enum_norm_wins_correct1 _ _ HIn) as [s' [Hs'1 Hs'2]].
       rewrite <- Hs'1.
@@ -503,10 +640,10 @@ Proof.
     destruct w; simpl in *; try lia.
     rewrite (atomic_win_opp _ _ e) in s_play.
     assert (pl = White) as s_pl by (now apply opp_inj).
-    rewrite nodup_In.
+    rewrite cond_nodup_In.
     apply enum_norm_wins_correct2; congruence.
   - intros s HIn; simpl in *.
-    rewrite nodup_In in HIn.
+    rewrite cond_nodup_In in HIn.
     assert (atomic_res s = Some (Win White)) as s_res.
     { destruct (enum_norm_wins_correct1 _ _ HIn) as [s' [Hs'1 Hs'2]].
       rewrite <- Hs'1.
@@ -514,20 +651,20 @@ Proof.
     }
     exists (atom_win s_res); split; auto.
     intro w'; simpl; lia.
-  - apply NoDup_nodup.
-  - apply NoDup_nodup.
+  - apply NoDup_cond_nodup.
+  - apply NoDup_cond_nodup.
   - intros.
-    now apply hash_lookup_empty.
+    now apply chash_lookup_empty.
   - intros.
-    now apply hash_lookup_empty.
+    now apply chash_lookup_empty.
   - intros s HIn; simpl in *.
-    rewrite nodup_In in HIn.
+    rewrite cond_nodup_In in HIn.
     destruct (enum_norm_wins_correct1 _ _ HIn) as [s' [Hss' s'_res]].
     rewrite <- Hss'.
     rewrite to_play_normalize.
     now rewrite (atomic_win_opp _ _ s'_res).
   - intros s HIn; simpl in *.
-    rewrite nodup_In in HIn.
+    rewrite cond_nodup_In in HIn.
     destruct (enum_norm_wins_correct1 _ _ HIn) as [s' [Hss' s'_res]].
     rewrite <- Hss'.
     rewrite to_play_normalize.
@@ -588,7 +725,8 @@ Proof.
           exact (tb_small _ v tb_sm).
           do 2 f_equal.
           apply (unique_winner _ _ (exec_move b m)).
-          * now destruct (tb_mate _ v tb_sm).
+          * pose proof (sm_p := closed b s_p m).
+            now destruct (tb_mate _ v sm_p tb_sm).
           * apply w.
         + exfalso.
           eapply (not_None_in_Somes).
@@ -601,7 +739,8 @@ Proof.
       assert (forall m, {w : win pl (exec_move b m) & depth w < curr tb}) as ws.
       { intro m.
         destruct (X m) as [k [Hk_small tb_sm]].
-        destruct (tb_mate _ v tb_sm) as [w' ?].
+        pose proof (sm_p := closed b s_p m).
+        destruct (tb_mate _ v sm_p tb_sm) as [w' ?].
         exists w'; lia.
       }
       pose (w' := abelard_win e e0 (fun m => projT1 (ws m))).
@@ -658,6 +797,13 @@ Proof.
         split; [now right|tauto].
 Defined.
 
+Lemma P_norm : forall s, P s -> P (normalize s).
+Proof.
+  intros s p.
+  apply bisim_closed with (s := s); auto.
+  apply normalize_bisim.
+Qed. 
+
 Lemma TB_step_valid : forall tb, TB_valid tb
   -> TB_valid (TB_step tb).
 Proof.
@@ -665,12 +811,13 @@ Proof.
   constructor.
   (* white_good *)
   - simpl.
-    apply good_as.
+    apply cgood_as.
     + apply (white_good _ v).
     + rewrite map_map.
       simpl.
       rewrite map_id.
       exact (lwp_NoDup _ v).
+    + admit.
     + intros s [pl n] HIn.
       apply (lwp_disj _ v).
       rewrite in_map_iff in HIn.
@@ -678,12 +825,13 @@ Proof.
       inversion Hs'; congruence.
   (* black_good *)
   - simpl.
-    apply good_as.
+    apply cgood_as.
     + apply (black_good _ v).
     + rewrite map_map.
       simpl.
       rewrite map_id.
       exact (lbp_NoDup _ v).
+    + admit.
     + intros s [pl n] HIn.
       apply (lbp_disj _ v).
       rewrite in_map_iff in HIn.
@@ -698,177 +846,211 @@ Proof.
       destruct (to_play s) eqn:s_play.
       * simpl.
         unfold add_positions.
-        rewrite hash_lookup_adds_nIn; auto.
-        rewrite map_map.
-        unfold tag; simpl.
-        rewrite map_id.
-        intro HIn.
-        rewrite lwp_disj in Htb; congruence.
+        rewrite chash_lookup_adds_nIn; auto.
+        -- admit.
+        -- apply P_norm; auto.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           intro HIn.
+           rewrite lwp_disj in Htb; congruence.
       * simpl.
         unfold add_positions.
-        rewrite hash_lookup_adds_nIn; auto.
-        rewrite map_map.
-        unfold tag; simpl.
-        rewrite map_id.
-        intro HIn.
-        rewrite lbp_disj in Htb; congruence.
+        rewrite chash_lookup_adds_nIn; auto.
+        -- admit.
+        -- apply P_norm; auto.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           intro HIn.
+           rewrite lbp_disj in Htb; congruence.
     + inversion pf as [pf'].
       unfold tb_lookup.
       destruct (to_play s) eqn:s_play.
       * simpl.
         unfold add_positions.
-        erewrite hash_lookup_adds;
-        [reflexivity| apply map_tag_functional|].
-        rewrite in_map_iff.
-        exists (normalize s).
-        rewrite pf' in sm.
-        pose proof (step_player_white _ v s_p s_play sm) as Hpl.
-        pose (mate_lwp _ v s_p s_play sm) as Hpl'.
-        split; auto.
-        now rewrite Hpl.
+        erewrite chash_lookup_adds;
+        [reflexivity| apply map_tag_functional| |].
+        -- admit.
+        -- rewrite in_map_iff.
+           exists (normalize s).
+           rewrite pf' in sm.
+           pose proof (step_player_white _ v s_p s_play sm) as Hpl.
+           pose (mate_lwp _ v s_p s_play sm) as Hpl'.
+           split; auto.
+           now rewrite Hpl.
       * simpl.
         unfold add_positions.
-        erewrite hash_lookup_adds;
-        [reflexivity| apply map_tag_functional|].
-        rewrite in_map_iff.
-        exists (normalize s).
-        rewrite pf' in sm.
-        pose proof (step_player_black _ v s_p s_play sm) as Hpl.
-        pose (mate_lbp _ v s_p s_play sm) as Hpl'.
-        split; auto.
-        now rewrite Hpl.
+        erewrite chash_lookup_adds;
+        [reflexivity| apply map_tag_functional| |].
+        -- admit.
+        -- rewrite in_map_iff.
+           exists (normalize s).
+           rewrite pf' in sm.
+           pose proof (step_player_black _ v s_p s_play sm) as Hpl.
+           pose (mate_lbp _ v s_p s_play sm) as Hpl'.
+           split; auto.
+           now rewrite Hpl.
   (* tb_mate *)
   - unfold tb_lookup.
-    intros s pl n Htb.
+    intros s pl n s_p Htb.
     destruct (to_play s) eqn:s_play.
     + simpl in Htb.
       unfold add_positions in Htb.
-      destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-      * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
-        unfold tag in Hs'1.
-        epose (lwp_mate _ v Hs'2).
-        inversion Hs'1; subst.
-        apply mate_of_normal_mate; auto.
-      * apply (tb_mate _ v).
-        unfold tb_lookup.
-        now rewrite s_play.
+      apply chash_lookup_adds_invert in Htb.
+      * destruct Htb as [pf|pf].
+        -- destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
+           unfold tag in Hs'1.
+           epose (lwp_mate _ v Hs'2).
+           inversion Hs'1; subst.
+           apply mate_of_normal_mate; auto.
+        -- apply (tb_mate _ v); auto.
+           unfold tb_lookup.
+           now rewrite s_play.
+      * apply P_norm; auto.
+      * admit.
     + simpl in Htb.
       unfold add_positions in Htb.
-      destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-      * destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
-        unfold tag in Hs'1.
-        epose (lbp_mate _ v Hs'2).
-        inversion Hs'1; subst.
-        apply mate_of_normal_mate; auto.
-      * apply (tb_mate _ v).
-        unfold tb_lookup.
-        now rewrite s_play.
+      apply chash_lookup_adds_invert in Htb.
+      * destruct Htb as [pf|pf].
+        -- destruct (in_map_sig pf) as [s' [Hs'1 Hs'2]].
+           unfold tag in Hs'1.
+           epose (lbp_mate _ v Hs'2).
+           inversion Hs'1; subst.
+           apply mate_of_normal_mate; auto.
+        -- apply (tb_mate _ v); auto.
+           unfold tb_lookup.
+           now rewrite s_play.
+      * apply P_norm; auto.
+      * admit.
   (* tb_small *)
   - intros s pl n Htb.
     unfold tb_lookup in Htb.
     destruct (to_play s) eqn:s_play; simpl in *.
-    + destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-      * rewrite in_map_iff in pf.
-        destruct pf as [s' [Hs'1 Hs'2]].
-        inversion Hs'1; lia.
-      * cut (n < curr tb); [lia|].
-        eapply (tb_small _ v).
-        unfold tb_lookup; rewrite s_play; eauto.
-    + destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-      * rewrite in_map_iff in pf.
-        destruct pf as [s' [Hs'1 Hs'2]].
-        inversion Hs'1; lia.
-      * cut (n < curr tb); [lia|].
-        eapply (tb_small _ v).
-        unfold tb_lookup; rewrite s_play; eauto.
+    + apply chash_lookup_adds_invert in Htb.
+      * destruct Htb as [pf|pf].
+        -- rewrite in_map_iff in pf.
+           destruct pf as [s' [Hs'1 Hs'2]].
+           inversion Hs'1; lia.
+        -- cut (n < curr tb); [lia|].
+           eapply (tb_small _ v).
+           unfold tb_lookup; rewrite s_play; eauto.
+      * admit. (*FIXME*)
+      * rewrite map_map.
+        unfold tag.
+        rewrite map_id.
+        admit.
+    + apply chash_lookup_adds_invert in Htb.
+      * destruct Htb as [pf|pf].
+        -- rewrite in_map_iff in pf.
+           destruct pf as [s' [Hs'1 Hs'2]].
+           inversion Hs'1; lia.
+        -- cut (n < curr tb); [lia|].
+           eapply (tb_small _ v).
+           unfold tb_lookup; rewrite s_play; eauto.
+      * admit.
+      * admit.
   (* tb_white *)
-  - intros s pl n Htb.
+  - intros s pl n s_p Htb.
     simpl in Htb.
-    destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-    + rewrite in_map_iff in pf.
-      destruct pf as [s' [Hs'1 Hs'2]].
-      inversion Hs'1; subst.
-      now apply (lwp_white _ v).
-    + eapply (tb_white _ v); exact pf.
+    apply chash_lookup_adds_invert in Htb; auto.
+    + destruct Htb as [pf|pf].
+      * rewrite in_map_iff in pf.
+        destruct pf as [s' [Hs'1 Hs'2]].
+        inversion Hs'1; subst.
+        now apply (lwp_white _ v).
+      * eapply (tb_white _ v); auto; exact pf.
+    + admit.
   (* tb_black *)
-  - intros s pl n Htb.
+  - intros s pl n s_p Htb.
     simpl in Htb.
-    destruct (hash_lookup_adds_invert _ _ _ _ Htb) as [pf|pf].
-    + rewrite in_map_iff in pf.
-      destruct pf as [s' [Hs'1 Hs'2]].
-      inversion Hs'1; subst.
-      now apply (lbp_black _ v).
-    + eapply (tb_black _ v); exact pf.
+    apply chash_lookup_adds_invert in Htb; auto.
+    + destruct Htb as [pf|pf].
+      * rewrite in_map_iff in pf.
+        destruct pf as [s' [Hs'1 Hs'2]].
+        inversion Hs'1; subst.
+        now apply (lbp_black _ v).
+      * eapply (tb_black _ v); auto; exact pf.
+    + admit.
   (* tb_None *)
   - intros s pl w s_p tb_s.
     unfold tb_lookup in tb_s.
     simpl in *.
     destruct (to_play s) eqn:s_play.
-    + destruct (hash_lookup_adds_None_invert tb_s) as [s_lwp tb'_s].
-      epose proof (tb_None _ v w s_p) as Hs.
-      unfold tb_lookup in Hs.
-      rewrite s_play in Hs.
-      specialize (Hs tb'_s).
-      destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
-      cut (mate pl s (curr tb)).
-      { intro sm.
-        elim s_lwp.
-        rewrite map_map.
-        unfold tag; simpl.
-        rewrite map_id.
-        apply (mate_lwp _ v s_p s_play sm).
-      }
-      exists w; split; auto.
-      intro w'.
-      rewrite e.
-      apply (tb_None _ v w'); auto.
-      unfold tb_lookup; now rewrite s_play.
-    + destruct (hash_lookup_adds_None_invert tb_s) as [s_lbp tb'_s].
-      epose proof (tb_None _ v w) as Hs.
-      unfold tb_lookup in Hs.
-      rewrite s_play in Hs.
-      specialize (Hs s_p tb'_s).
-      destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
-      cut (mate pl s (curr tb)).
-      { intro sm.
-        elim s_lbp.
-        rewrite map_map.
-        unfold tag; simpl.
-        rewrite map_id.
-        apply (mate_lbp _ v s_p s_play sm).
-      }
-      exists w; split; auto.
-      intro w'.
-      rewrite e.
-      apply (tb_None _ v w'); auto.
-      unfold tb_lookup; now rewrite s_play.
+    + apply chash_lookup_adds_None_invert in tb_s.
+      * destruct tb_s as [s_lwp tb'_s].
+        epose proof (tb_None _ v w s_p) as Hs.
+        unfold tb_lookup in Hs.
+        rewrite s_play in Hs.
+        specialize (Hs tb'_s).
+        destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
+        cut (mate pl s (curr tb)).
+        { intro sm.
+          elim s_lwp.
+          rewrite map_map.
+          unfold tag; simpl.
+          rewrite map_id.
+          apply (mate_lwp _ v s_p s_play sm).
+        }
+        exists w; split; auto.
+        intro w'.
+        rewrite e.
+        apply (tb_None _ v w'); auto.
+        unfold tb_lookup; now rewrite s_play.
+      * admit.
+      * apply P_norm; auto.
+    + apply chash_lookup_adds_None_invert in tb_s.
+      * destruct tb_s as [s_lwp tb'_s].
+        epose proof (tb_None _ v w s_p) as Hs.
+        unfold tb_lookup in Hs.
+        rewrite s_play in Hs.
+        specialize (Hs tb'_s).
+        destruct (PeanoNat.Nat.eq_dec (depth w) (curr tb)); [|lia].
+        cut (mate pl s (curr tb)).
+        { intro sm.
+          elim s_lwp.
+          rewrite map_map.
+          unfold tag; simpl.
+          rewrite map_id.
+          apply (mate_lbp _ v s_p s_play sm).
+        }
+        exists w; split; auto.
+        intro w'.
+        rewrite e.
+        apply (tb_None _ v w'); auto.
+        unfold tb_lookup; now rewrite s_play.
+      * admit.
+      * apply P_norm; auto.
   (* mate_lwp *)
   - intros s pl s_p s_play sm; simpl in *.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step.
-      rewrite nodup_In.
+      rewrite cond_nodup_In.
       rewrite filter_In; split.
       * rewrite filter_dec_In; split; [|now apply P_to_Pnorm].
         rewrite In_filter_Nones_iff; split.
         -- rewrite tb_step; simpl.
            apply not_Some_None.
            intros [pl' n] tb_s.
-           destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
-           ++ rewrite in_map_iff in pf.
-              destruct pf as [s' [Hs'1 Hs'2]].
-              inversion Hs'1; subst.
-              pose (lwp_mate _ v Hs'2) as m.
-              apply mate_of_normal_mate in m.
-              pose (mate_eq sm m); lia.
-           ++ epose (tb_small _ v).
-              unfold tb_lookup in l.
-              rewrite s_play in l.
-              specialize (l pf).
-              epose (tb_mate _ v).
-              unfold tb_lookup in m.
-              rewrite s_play in m.
-              specialize (m pf).
-              pose (mate_eq sm m); lia.
+           apply chash_lookup_adds_invert in tb_s.
+           ++ destruct tb_s as [pf|pf].
+              ** rewrite in_map_iff in pf.
+                 destruct pf as [s' [Hs'1 Hs'2]].
+                 inversion Hs'1; subst.
+                 pose (lwp_mate _ v Hs'2) as m.
+                 apply mate_of_normal_mate in m.
+                 pose (mate_eq sm m); lia.
+              ** epose (tb_small _ v).
+                 unfold tb_lookup in l.
+                 rewrite s_play in l.
+                 specialize (l pf).
+                 epose (tb_mate _ v s_p).
+                 unfold tb_lookup in m.
+                 rewrite s_play in m.
+                 specialize (m pf).
+                 pose (mate_eq sm m); lia.
+           ++ apply P_norm; auto.
+           ++ admit.
         -- destruct (mate_S_lemma _ v s_p sm) as [m smm].
            apply (mate_lbp _ v) in smm; [|now apply closed |now rewrite 
              to_play_exec_move, s_play].
@@ -891,105 +1073,116 @@ Proof.
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_black _ v (closed s s_p m') sm'_play smm') as Hpl.
         rewrite tb_step in Hpl; simpl in Hpl.
-        destruct hash_lookup as [[pl' n']|] eqn:tb_sm.
-        -- destruct (hash_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
-           ++ rewrite in_map_iff in pf.
-              destruct pf as [s' [Hs'1 Hs'2]].
-              inversion Hs'1.
-              now rewrite tb_step.
-           ++ destruct pl'; [|reflexivity].
-              absurd (Black = White); [discriminate|].
-              apply (unique_winner _ _ s).
-              ** rewrite Hpl in sm.
-                 now destruct sm.
-              ** apply win_of_normal_win.
-                 apply eloise_win with (m := m); auto.
-                 { rewrite atomic_res_normalize.
-                   destruct (atomic_res s) eqn:s_res; auto.
-                   pose proof (enum_all m) as HIn.
-                   rewrite <- atomic_res_normalize in s_res.
-                   rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
-                 }
-                 { rewrite to_play_normalize; auto. }
-                 epose (@tb_mate _ v (exec_move (normalize s) m)).
-                 unfold tb_lookup in m0.
-                 rewrite to_play_exec_move in m0.
-                 rewrite to_play_normalize in m0.
-                 rewrite s_play in m0; simpl in m0.
-                 destruct (m0 _ _ pf); eauto.
+        destruct chash_lookup as [[pl' n']|] eqn:tb_sm.
+        -- apply chash_lookup_adds_invert in tb_sm.
+           ++ destruct tb_sm as [pf|pf].
+              ** rewrite in_map_iff in pf.
+                 destruct pf as [s' [Hs'1 Hs'2]].
+                 inversion Hs'1.
+                 now rewrite tb_step.
+              ** destruct pl'; [|reflexivity].
+                 absurd (Black = White); [discriminate|].
+                 apply (unique_winner _ _ s).
+                 --- rewrite Hpl in sm.
+                     now destruct sm.
+                 --- apply win_of_normal_win.
+                     apply eloise_win with (m := m); auto.
+                     { rewrite atomic_res_normalize.
+                       destruct (atomic_res s) eqn:s_res; auto.
+                       pose proof (enum_all m) as HIn.
+                       rewrite <- atomic_res_normalize in s_res.
+                       rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
+                     }
+                     { rewrite to_play_normalize; auto. }
+                     epose (@tb_mate _ v (exec_move (normalize s) m)).
+                     unfold tb_lookup in m0.
+                     rewrite to_play_exec_move in m0.
+                     rewrite to_play_normalize in m0.
+                     rewrite s_play in m0; simpl in m0.
+                     assert (P (exec_move (normalize s) m)) as p.
+                     { apply closed; apply P_norm; auto. }
+                     destruct (m0 _ _ p pf); eauto.
+           ++ apply P_norm; apply closed; apply P_norm; auto.
+           ++ admit.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
-           destruct (hash_lookup_adds_None_invert tb_sm).
-           destruct sm as [w [w_d wm]].
-           destruct w; [simpl in w_d; lia|congruence|].
-           pose (tb_None _ v (w (back G G auto (normalize_bisim b) m))).
-           unfold tb_lookup in l.
-           rewrite to_play_exec_move in l.
-           rewrite s_play in l; simpl in l.
-           assert (normalize (exec_move b (back G G auto (normalize_bisim b) m)) = normalize (exec_move (normalize b) m)).
-           { apply normalize_functional;
-             apply exec_back.
-           }
-           rewrite H10 in l.
-           assert (P (exec_move b (back G G auto (normalize_bisim b) m))).
-           { now apply closed. }
-           specialize (l H11 H9).
-           simpl in w_d.
-           inversion w_d as [w_d']; clear w_d.
-           assert (depth (w (back G G auto (normalize_bisim b) m)) <= curr tb).
-           { rewrite <- w_d'.
-             apply list_max_is_max.
-             rewrite in_map_iff.
-             eexists; split; auto.
-             apply enum_all.
-           }
-           assert (mate Black (exec_move b (back G G auto (normalize_bisim b) m)) (curr tb)).
-           { exists (w _).
-             split; [lia|].
-             intro w'.
-             assert (depth (w (back G G auto (normalize_bisim b) m)) = curr tb) by lia.
-             rewrite H12.
-             apply (tb_None _ v w'); auto.
-             unfold tb_lookup.
-             rewrite to_play_exec_move. rewrite s_play. simpl; auto.
-             rewrite H10; auto.
-           }
-           elim H8.
-           rewrite in_map_iff.
-           exists (normalize (exec_move (normalize b) m) , (Black, curr tb)).
-           simpl; split; [reflexivity|].
-           rewrite in_map_iff.
-           exists (normalize (exec_move (normalize b) m)); split; [reflexivity|].
-           eapply (mate_lbp _ v).
-           ++ apply closed; now apply P_to_Pnorm.
-           ++ rewrite to_play_exec_move.
-           rewrite to_play_normalize.
-           rewrite s_play; reflexivity.
-           ++ apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
-           exact X.
-           apply exec_back.
+           apply chash_lookup_adds_None_invert in tb_sm.
+           ++ destruct tb_sm.
+              destruct sm as [w [w_d wm]].
+              destruct w; [simpl in w_d; lia|congruence|].
+              pose (tb_None _ v (w (back G G auto (normalize_bisim b) m))).
+              unfold tb_lookup in l.
+              rewrite to_play_exec_move in l.
+              rewrite s_play in l; simpl in l.
+              assert (normalize (exec_move b (back G G auto (normalize_bisim b) m)) = normalize (exec_move (normalize b) m)).
+              { apply normalize_functional;
+                apply exec_back.
+              }
+              rewrite H11 in l.
+              assert (P (exec_move b (back G G auto (normalize_bisim b) m))).
+              { now apply closed. }
+              specialize (l H12 H10).
+              simpl in w_d.
+              inversion w_d as [w_d']; clear w_d.
+              assert (depth (w (back G G auto (normalize_bisim b) m)) <= curr tb).
+              { rewrite <- w_d'.
+                apply list_max_is_max.
+                rewrite in_map_iff.
+                eexists; split; auto.
+                apply enum_all.
+              }
+              assert (mate Black (exec_move b (back G G auto (normalize_bisim b) m)) (curr tb)).
+              { exists (w _).
+                split; [lia|].
+                intro w'.
+                assert (depth (w (back G G auto (normalize_bisim b) m)) = curr tb) by lia.
+                rewrite H13.
+                apply (tb_None _ v w'); auto.
+                unfold tb_lookup.
+                rewrite to_play_exec_move. rewrite s_play. simpl; auto.
+                rewrite H11; auto.
+              }
+              elim H9.
+              rewrite in_map_iff.
+              exists (normalize (exec_move (normalize b) m) , (Black, curr tb)).
+              simpl; split; [reflexivity|].
+              rewrite in_map_iff.
+              exists (normalize (exec_move (normalize b) m)); split; [reflexivity|].
+              eapply (mate_lbp _ v).
+              ** apply closed; now apply P_to_Pnorm.
+              ** rewrite to_play_exec_move.
+                 rewrite to_play_normalize.
+                 rewrite s_play; reflexivity.
+              ** apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
+                 exact X.
+                 apply exec_back.
+           ++ admit.
+           ++ apply P_norm; apply closed; apply P_norm; auto.
     + unfold eloise_step.
-      rewrite nodup_In.
+      rewrite cond_nodup_In.
       rewrite filter_dec_In; split; [|now apply P_to_Pnorm].
       rewrite In_filter_Nones_iff; split.
       * apply not_Some_None.
         intros [pl' n] tb_s.
-        destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
-        -- rewrite in_map_iff in pf.
-           destruct pf as [s' [Hs'1 Hs'2]].
-           inversion Hs'1; subst.
-           pose (lwp_mate _ v Hs'2).
-           apply mate_of_normal_mate in m.
-           pose (mate_eq sm m); lia.
-        -- epose (tb_small _ v).
-           unfold tb_lookup in l.
-           rewrite s_play in l.
-           specialize (l pf).
-           epose (tb_mate _ v).
-           unfold tb_lookup in m.
-           rewrite s_play in m.
-           specialize (m pf).
-           pose (mate_eq sm m); lia.
+        apply chash_lookup_adds_invert in tb_s.
+        -- destruct tb_s as [pf|pf].
+           ++ rewrite in_map_iff in pf.
+               destruct pf as [s' [Hs'1 Hs'2]].
+               inversion Hs'1; subst.
+               pose (lwp_mate _ v Hs'2).
+               apply mate_of_normal_mate in m.
+               pose (mate_eq sm m); lia.
+           ++ epose (tb_small _ v).
+              unfold tb_lookup in l.
+              rewrite s_play in l.
+              specialize (l pf).
+              epose (tb_mate _ v).
+              unfold tb_lookup in m.
+              rewrite s_play in m.
+              specialize (m s_p pf).
+              pose (mate_eq sm m); lia.
+        -- apply P_norm; auto.
+        -- admit.
       * destruct (mate_S_lemma _ v s_p sm) as [m smm].
         pose proof (inv_forward_correct _ _ _ s m _ (normalize_bisim _)).
         pose proof (exec_inv_forward _ _ _ s m _ (normalize_bisim _)).
@@ -1000,7 +1193,7 @@ Proof.
         exists (enum_preds (exec_move x m0)).
         split.
         -- apply in_map.
-           rewrite H8.
+           rewrite H9.
            eapply (mate_lbp _ v).
            ++ now apply closed.
            ++ rewrite to_play_exec_move, s_play; reflexivity.
@@ -1010,7 +1203,7 @@ Proof.
   - intros s HIn; simpl in *.
     destruct (last_step tb) eqn:tb_step; simpl.
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' Hforall].
       rewrite filter_dec_In in HIn'; destruct HIn' as [pf1 pf2].
@@ -1041,40 +1234,45 @@ Proof.
       assert (forall m, {w : win Black (exec_move t m) & depth w <= curr tb /\ minimal w}).
       { intro m'.
         specialize (Hforall (forward G G auto (normalize_bisim _) m') (enum_all _)).
-        destruct (hash_lookup
+        destruct (chash_lookup
               (normalize
                  (exec_move (normalize t)
                     (forward G G auto (normalize_bisim t) m')))
               (add_positions (black_positions tb) Black
                  (curr tb) (last_black_positions tb))) as [[[|] n]|] eqn:Hsm; try congruence.
         clear Hforall.
-        destruct (hash_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
-        + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
-          pose (lbp_mate _ v G2) as sm.
-          rewrite tb_step in sm; simpl in sm.
-          apply mate_of_normal_mate in sm.
-          apply bisim_mate with (B := auto) (s' := exec_move t m') in sm;
-            [|apply auto_sym; apply exec_forward].
-          destruct sm as [w' []].
-          exists w'; split; [lia|auto].
-        + pose (@tb_mate _ v (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m'))) Black n) as sm.
-          unfold tb_lookup in sm.
-          rewrite to_play_normalize in sm.
-          rewrite to_play_exec_move in sm.
-          rewrite to_play_normalize in sm.
-          rewrite t_play in sm; simpl in sm.
-          rewrite normalize_idem in sm.
-          pose (sm tb_sm) as sm'.
-          apply mate_of_normal_mate in sm'.
-          apply bisim_mate with (B := auto) (s' := exec_move t m') in sm';
-            [| apply auto_sym; apply exec_forward].
-          destruct sm' as [w' [w'_d w'_m]].
-          exists w'; split; auto.
-          pose (@tb_small _ v (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')) Black n).
-          unfold tb_lookup in l.
-          rewrite to_play_exec_move in l.
-          rewrite to_play_normalize in l.
-          rewrite t_play in l; specialize (l tb_sm); lia.
+        apply chash_lookup_adds_invert in Hsm.
+        + destruct Hsm as [HIn|tb_sm].
+          * destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
+            pose (lbp_mate _ v G2) as sm.
+            rewrite tb_step in sm; simpl in sm.
+            apply mate_of_normal_mate in sm.
+            apply bisim_mate with (B := auto) (s' := exec_move t m') in sm;
+              [|apply auto_sym; apply exec_forward].
+            destruct sm as [w' []].
+            exists w'; split; [lia|auto].
+          * pose (@tb_mate _ v (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m'))) Black n) as sm.
+            unfold tb_lookup in sm.
+            rewrite to_play_normalize in sm.
+            rewrite to_play_exec_move in sm.
+            rewrite to_play_normalize in sm.
+            rewrite t_play in sm; simpl in sm.
+            rewrite normalize_idem in sm.
+            assert (P (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')))) as p.
+            { apply P_norm. apply closed; auto. }
+            pose (sm p tb_sm) as sm'.
+            apply mate_of_normal_mate in sm'.
+            apply bisim_mate with (B := auto) (s' := exec_move t m') in sm';
+              [| apply auto_sym; apply exec_forward].
+            destruct sm' as [w' [w'_d w'_m]].
+            exists w'; split; auto.
+            pose (@tb_small _ v (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')) Black n).
+            unfold tb_lookup in l.
+            rewrite to_play_exec_move in l.
+            rewrite to_play_normalize in l.
+            rewrite t_play in l; specialize (l tb_sm); lia.
+        + apply P_norm; apply closed; auto.
+        + admit.
       }
       pose (w' := @abelard_win _ Black _ t_res t_play (fun m => projT1 (X m))).
       apply mate_to_normal_mate.
@@ -1084,8 +1282,8 @@ Proof.
         -- rewrite list_max_le.
            rewrite Forall_forall.
            intros.
-           rewrite in_map_iff in H8.
-           destruct H8 as [m' [Hm' _]].
+           rewrite in_map_iff in H9.
+           destruct H9 as [m' [Hm' _]].
            destruct (X m').
            simpl in *; lia.
         -- apply list_max_is_max.
@@ -1102,7 +1300,7 @@ Proof.
         destruct (X m'); simpl.
         apply a.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       destruct HIn as [pf1 pf2].
       rewrite In_filter_Nones_iff in pf1.
@@ -1134,53 +1332,58 @@ Proof.
       destruct w'; simpl in *; try congruence.
       apply le_n_S.
       rewrite w_d.
-      destruct (hash_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
-      pose (w'' := eloise_win s_res s_play m0 w').
-      epose proof (tb_None _ v w'') as Hw'.
-      unfold tb_lookup in Hw'.
-      rewrite s_play in Hw'.
-      assert (P b) as b_p by now apply Pnorm_to_P.
-      specialize (Hw' b_p lwp_b).
-      simpl in Hw'.
-      rewrite map_map in tb_b; simpl in tb_b.
-      rewrite map_id in tb_b.
-      rewrite PeanoNat.Nat.le_ngt.
-      intro pf.
-      assert (S (depth w') = (curr tb)) by lia.
-      apply tb_b.
-      eapply (mate_lwp _ v b_p s_play).
-      exists w''; split; auto.
-      intro. simpl. rewrite H8.
-      eapply (tb_None _ v); auto.
-      unfold tb_lookup.
-      now rewrite s_play.
+      apply chash_lookup_adds_None_invert in Hs1; auto.
+      * destruct Hs1 as [tb_b lwp_b].
+        pose (w'' := eloise_win s_res s_play m0 w').
+        epose proof (tb_None _ v w'') as Hw'.
+        unfold tb_lookup in Hw'.
+        rewrite s_play in Hw'.
+        assert (P b) as b_p by now apply Pnorm_to_P.
+        specialize (Hw' b_p lwp_b).
+        simpl in Hw'.
+        rewrite map_map in tb_b; simpl in tb_b.
+        rewrite map_id in tb_b.
+        rewrite PeanoNat.Nat.le_ngt.
+        intro pf.
+        assert (S (depth w') = (curr tb)) by lia.
+        apply tb_b.
+        eapply (mate_lwp _ v b_p s_play).
+        exists w''; split; auto.
+        intro. simpl. rewrite H9.
+        eapply (tb_None _ v); auto.
+        unfold tb_lookup.
+        now rewrite s_play.
+      * admit.
   (* mate_lbp *)
   - intros s pl s_p s_play sm; simpl in *.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step.
-      rewrite nodup_In.
+      rewrite cond_nodup_In.
       rewrite filter_In; split.
       * rewrite filter_dec_In; split; [|now apply P_to_Pnorm].
         rewrite In_filter_Nones_iff; split.
         -- rewrite tb_step; simpl.
            apply not_Some_None.
            intros [pl' n] tb_s.
-           destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
-           ++ rewrite in_map_iff in pf.
-              destruct pf as [s' [Hs'1 Hs'2]].
-              inversion Hs'1; subst.
-              pose (lbp_mate _ v Hs'2) as m.
-              apply mate_of_normal_mate in m.
-              pose (mate_eq sm m); lia.
-           ++ epose (tb_small _ v).
-              unfold tb_lookup in l.
-              rewrite s_play in l.
-              specialize (l pf).
-              epose (tb_mate _ v).
-              unfold tb_lookup in m.
-              rewrite s_play in m.
-              specialize (m pf).
-              pose (mate_eq sm m); lia.
+           apply chash_lookup_adds_invert in tb_s.
+           ++ destruct tb_s as [pf|pf].
+              ** rewrite in_map_iff in pf.
+                 destruct pf as [s' [Hs'1 Hs'2]].
+                 inversion Hs'1; subst.
+                 pose (lbp_mate _ v Hs'2) as m.
+                 apply mate_of_normal_mate in m.
+                 pose (mate_eq sm m); lia.
+              ** epose (tb_small _ v).
+                 unfold tb_lookup in l.
+                 rewrite s_play in l.
+                 specialize (l pf).
+                 epose (tb_mate _ v).
+                 unfold tb_lookup in m.
+                 rewrite s_play in m.
+                 specialize (m s_p pf).
+                 pose (mate_eq sm m); lia.
+            ++ apply P_norm; auto.
+            ++ admit.
         -- destruct (mate_S_lemma _ v s_p sm) as [m smm].
            apply (mate_lwp _ v) in smm; [| now apply closed |now rewrite 
              to_play_exec_move, s_play].
@@ -1203,103 +1406,114 @@ Proof.
           by now rewrite to_play_exec_move, s_play.
         pose proof (step_player_white _ v (closed s s_p m') sm'_play smm') as Hpl.
         rewrite tb_step in Hpl; simpl in Hpl.
-        destruct hash_lookup as [[pl' n']|] eqn:tb_sm.
-        -- destruct (hash_lookup_adds_invert _ _ _ _ tb_sm) as [pf|pf].
-           ++ rewrite in_map_iff in pf.
-              destruct pf as [s' [Hs'1 Hs'2]].
-              inversion Hs'1.
-              now rewrite tb_step.
-           ++ destruct pl'; [reflexivity|].
-              absurd (White = Black); [discriminate|].
-              apply (unique_winner _ _ s).
-              ** rewrite Hpl in sm.
-                 now destruct sm.
-              ** apply win_of_normal_win.
-                 apply eloise_win with (m := m); auto.
-                 { rewrite atomic_res_normalize.
-                   destruct (atomic_res s) eqn:s_res; auto.
-                   pose proof (enum_all m) as HIn.
-                   rewrite <- atomic_res_normalize in s_res.
-                   rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
-                 }
-                 { rewrite to_play_normalize; auto. }
-                 epose (@tb_mate _ v (exec_move (normalize s) m)).
-                 unfold tb_lookup in m0.
-                 rewrite to_play_exec_move in m0.
-                 rewrite to_play_normalize in m0.
-                 rewrite s_play in m0; simpl in m0.
-                 destruct (m0 _ _ pf); eauto.
+        destruct chash_lookup as [[pl' n']|] eqn:tb_sm.
+        -- apply chash_lookup_adds_invert in tb_sm.
+           ++ destruct tb_sm as [pf|pf].
+              ** rewrite in_map_iff in pf.
+                 destruct pf as [s' [Hs'1 Hs'2]].
+                 inversion Hs'1.
+                 now rewrite tb_step.
+              ** destruct pl'; [reflexivity|].
+                 absurd (White = Black); [discriminate|].
+                 apply (unique_winner _ _ s).
+                 --- rewrite Hpl in sm.
+                     now destruct sm.
+                 --- apply win_of_normal_win.
+                     apply eloise_win with (m := m); auto.
+                     { rewrite atomic_res_normalize.
+                       destruct (atomic_res s) eqn:s_res; auto.
+                       pose proof (enum_all m) as HIn.
+                       rewrite <- atomic_res_normalize in s_res.
+                       rewrite (atomic_res_nil s_res) in HIn; destruct HIn.
+                     }
+                     { rewrite to_play_normalize; auto. }
+                     epose (@tb_mate _ v (exec_move (normalize s) m)).
+                     unfold tb_lookup in m0.
+                     rewrite to_play_exec_move in m0.
+                     rewrite to_play_normalize in m0.
+                     rewrite s_play in m0; simpl in m0.
+                     assert (P (exec_move (normalize s) m)) as p.
+                     { apply closed; apply P_norm; auto. }
+                     destruct (m0 _ _ p pf); eauto.
+           ++ apply P_norm; apply closed; apply P_norm; auto.
+           ++ admit.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
-           destruct (hash_lookup_adds_None_invert tb_sm).
-           destruct sm as [w [w_d wm]].
-           destruct w; [simpl in w_d; lia|congruence|].
-           pose (tb_None _ v (w (back G G auto (normalize_bisim b) m))).
-           unfold tb_lookup in l.
-           rewrite to_play_exec_move in l.
-           rewrite s_play in l; simpl in l.
-           assert (normalize (exec_move b (back G G auto (normalize_bisim b) m)) = normalize (exec_move (normalize b) m)).
-           { apply normalize_functional;
-             apply exec_back.
-           }
-           rewrite H10 in l.
-           specialize (l (closed _ s_p _) H9).
-           simpl in w_d.
-           inversion w_d as [w_d']; clear w_d.
-           assert (depth (w (back G G auto (normalize_bisim b) m)) <= curr tb).
-           { rewrite <- w_d'.
-             apply list_max_is_max.
-             rewrite in_map_iff.
-             eexists; split; auto.
-             apply enum_all.
-           }
-           assert (mate White (exec_move b (back G G auto (normalize_bisim b) m)) (curr tb)).
-           { exists (w _).
-             split; [lia|].
-             intro w'.
-             assert (depth (w (back G G auto (normalize_bisim b) m)) = curr tb) by lia.
-             rewrite H12.
-             apply (tb_None _ v w'); [now apply closed|].
-             unfold tb_lookup.
-             rewrite to_play_exec_move. rewrite s_play. simpl; auto.
-             rewrite H10; auto.
-           }
-           elim H8.
-           rewrite in_map_iff.
-           exists (normalize (exec_move (normalize b) m) , (White, curr tb)).
-           simpl; split; [reflexivity|].
-           rewrite in_map_iff.
-           exists (normalize (exec_move (normalize b) m)); split; [reflexivity|].
-           eapply (mate_lwp _ v).
-           ++ apply closed; now apply P_to_Pnorm.
-           ++ rewrite to_play_exec_move.
-              rewrite to_play_normalize.
-              rewrite s_play; reflexivity.
-           ++ apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
-              exact X.
-              apply exec_back.
+           apply chash_lookup_adds_None_invert in tb_sm.
+           ++ destruct tb_sm.
+              destruct sm as [w [w_d wm]].
+              destruct w; [simpl in w_d; lia|congruence|].
+              pose (tb_None _ v (w (back G G auto (normalize_bisim b) m))).
+              unfold tb_lookup in l.
+              rewrite to_play_exec_move in l.
+              rewrite s_play in l; simpl in l.
+              assert (normalize (exec_move b (back G G auto (normalize_bisim b) m)) = normalize (exec_move (normalize b) m)).
+              { apply normalize_functional;
+                apply exec_back.
+              }
+              rewrite H11 in l.
+              specialize (l (closed _ s_p _) H10).
+              simpl in w_d.
+              inversion w_d as [w_d']; clear w_d.
+              assert (depth (w (back G G auto (normalize_bisim b) m)) <= curr tb).
+              { rewrite <- w_d'.
+                apply list_max_is_max.
+                rewrite in_map_iff.
+                eexists; split; auto.
+                apply enum_all.
+              }
+              assert (mate White (exec_move b (back G G auto (normalize_bisim b) m)) (curr tb)).
+              { exists (w _).
+                split; [lia|].
+                intro w'.
+                assert (depth (w (back G G auto (normalize_bisim b) m)) = curr tb) by lia.
+                rewrite H12.
+                apply (tb_None _ v w'); [now apply closed|].
+                unfold tb_lookup.
+                rewrite to_play_exec_move. rewrite s_play. simpl; auto.
+                rewrite H11; auto.
+              }
+              elim H9.
+              rewrite in_map_iff.
+              exists (normalize (exec_move (normalize b) m) , (White, curr tb)).
+              simpl; split; [reflexivity|].
+              rewrite in_map_iff.
+              exists (normalize (exec_move (normalize b) m)); split; [reflexivity|].
+              eapply (mate_lwp _ v).
+              ** apply closed; now apply P_to_Pnorm.
+              ** rewrite to_play_exec_move.
+                 rewrite to_play_normalize.
+                 rewrite s_play; reflexivity.
+              ** apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
+                 exact X.
+                 apply exec_back.
+        ++ admit.
+        ++ apply P_norm; apply closed; apply P_norm; auto.
     + unfold eloise_step.
-      rewrite nodup_In.
+      rewrite cond_nodup_In.
       rewrite filter_dec_In; split; [|now apply P_to_Pnorm].
       rewrite In_filter_Nones_iff; split.
       * apply not_Some_None.
         intros [pl' n] tb_s.
-        destruct (hash_lookup_adds_invert _ _ _ _ tb_s) as [pf|pf].
-        -- rewrite in_map_iff in pf.
-           destruct pf as [s' [Hs'1 Hs'2]].
-           inversion Hs'1; subst.
-           pose (lbp_mate _ v Hs'2).
-           apply mate_of_normal_mate in m.
-           pose (mate_eq sm m); lia.
-        -- epose (tb_small _ v).
-           unfold tb_lookup in l.
-           rewrite s_play in l.
-           specialize (l pf).
-           epose (tb_mate _ v).
-           unfold tb_lookup in m.
-           rewrite s_play in m.
-           specialize (m pf).
-           pose (mate_eq sm m); lia.
+        apply chash_lookup_adds_invert in tb_s.
+        -- destruct tb_s as [pf|pf].
+           ++ rewrite in_map_iff in pf.
+              destruct pf as [s' [Hs'1 Hs'2]].
+              inversion Hs'1; subst.
+              pose (lbp_mate _ v Hs'2).
+              apply mate_of_normal_mate in m.
+              pose (mate_eq sm m); lia.
+           ++ epose (tb_small _ v).
+              unfold tb_lookup in l.
+              rewrite s_play in l.
+              specialize (l pf).
+              epose (tb_mate _ v).
+              unfold tb_lookup in m.
+              rewrite s_play in m.
+              specialize (m s_p pf).
+              pose (mate_eq sm m); lia.
+        -- apply P_norm; auto.
+        -- admit.
       * destruct (mate_S_lemma _ v s_p sm) as [m smm].
         pose proof (inv_forward_correct _ _ _ s m _ (normalize_bisim _)).
         pose proof (exec_inv_forward _ _ _ s m _ (normalize_bisim _)).
@@ -1310,7 +1524,7 @@ Proof.
         exists (enum_preds (exec_move x m0)).
         split.
         -- apply in_map.
-           rewrite H8.
+           rewrite H9.
            eapply (mate_lwp _ v); eauto.
            ++ now apply closed.
            ++ rewrite to_play_exec_move, s_play; auto.
@@ -1319,7 +1533,7 @@ Proof.
   - intros s HIn; simpl in *.
     destruct (last_step tb) eqn:tb_step; simpl.
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' Hforall].
       rewrite filter_dec_In in HIn'.
@@ -1351,41 +1565,46 @@ Proof.
       assert (forall m, {w : win White (exec_move t m) & depth w <= curr tb /\ minimal w}).
       { intro m'.
         specialize (Hforall (forward G G auto (normalize_bisim _) m') (enum_all _)).
-        destruct (hash_lookup
+        destruct (chash_lookup
               (normalize
                  (exec_move (normalize t)
                     (forward G G auto (normalize_bisim t) m')))
               (add_positions (white_positions tb) White
                  (curr tb) (last_white_positions tb))) as [[[|] n]|] eqn:Hsm; try congruence.
         clear Hforall.
-        destruct (hash_lookup_adds_invert _ _ _ _ Hsm) as [HIn|tb_sm].
-        + destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
-          pose (lwp_mate _ v G2) as sm.
-          rewrite tb_step in sm; simpl in sm.
-          apply mate_of_normal_mate in sm.
-          apply bisim_mate with (B := auto) (s' := exec_move t m') in sm;
-            [|apply auto_sym; apply exec_forward].
-          destruct sm as [w' []].
-          exists w'; split; [lia|auto].
-        + pose (@tb_mate _ v (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m'))) White n) as sm.
-          unfold tb_lookup in sm.
-          rewrite to_play_normalize in sm.
-          rewrite to_play_exec_move in sm.
-          rewrite to_play_normalize in sm.
-          rewrite t_play in sm; simpl in sm.
-          rewrite normalize_idem in sm.
-          pose (sm tb_sm) as sm'.
-          apply mate_of_normal_mate in sm'.
-          apply bisim_mate with (B := auto) (s' := exec_move t m') in sm';
-            [| apply auto_sym; apply exec_forward].
-          destruct sm' as [w' [w'_d w'_m]].
-          exists w'; split; auto.
-          pose (@tb_small _ v (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')) White n).
-          unfold tb_lookup in l.
-          rewrite to_play_exec_move in l.
-          rewrite to_play_normalize in l.
-          rewrite t_play in l; specialize (l tb_sm); lia.
-      }
+        apply chash_lookup_adds_invert in Hsm.
+        + destruct Hsm as [HIn|tb_sm].
+          * destruct (in_map_sig HIn) as [s' [G1 G2]]; inversion G1; subst.
+            pose (lwp_mate _ v G2) as sm.
+            rewrite tb_step in sm; simpl in sm.
+            apply mate_of_normal_mate in sm.
+            apply bisim_mate with (B := auto) (s' := exec_move t m') in sm;
+              [|apply auto_sym; apply exec_forward].
+            destruct sm as [w' []].
+            exists w'; split; [lia|auto].
+          * pose (@tb_mate _ v (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m'))) White n) as sm.
+            unfold tb_lookup in sm.
+            rewrite to_play_normalize in sm.
+            rewrite to_play_exec_move in sm.
+            rewrite to_play_normalize in sm.
+            rewrite t_play in sm; simpl in sm.
+            rewrite normalize_idem in sm.
+            assert (P (normalize (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')))) as p.
+            { apply P_norm. apply closed; auto. }
+            pose (sm p tb_sm) as sm'.
+            apply mate_of_normal_mate in sm'.
+            apply bisim_mate with (B := auto) (s' := exec_move t m') in sm';
+              [| apply auto_sym; apply exec_forward].
+            destruct sm' as [w' [w'_d w'_m]].
+            exists w'; split; auto.
+            pose (@tb_small _ v (exec_move (normalize t) (forward G G auto (normalize_bisim t) m')) White n).
+            unfold tb_lookup in l.
+            rewrite to_play_exec_move in l.
+            rewrite to_play_normalize in l.
+            rewrite t_play in l; specialize (l tb_sm); lia.
+        + apply P_norm; apply closed; auto.
+        + admit.
+        }
       pose (w' := @abelard_win _ White _ t_res t_play (fun m => projT1 (X m))).
       apply mate_to_normal_mate.
       exists w'; simpl; split.
@@ -1394,8 +1613,8 @@ Proof.
         -- rewrite list_max_le.
            rewrite Forall_forall.
            intros.
-           rewrite in_map_iff in H8.
-           destruct H8 as [m' [Hm' _]].
+           rewrite in_map_iff in H9.
+           destruct H9 as [m' [Hm' _]].
            destruct (X m').
            simpl in *; lia.
         -- apply list_max_is_max.
@@ -1412,7 +1631,7 @@ Proof.
         destruct (X m'); simpl.
         apply a.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       destruct HIn as [pf1 pf2].
       rewrite In_filter_Nones_iff in pf1.
@@ -1444,46 +1663,48 @@ Proof.
       destruct w'; simpl in *; try congruence.
       apply le_n_S.
       rewrite w_d.
-      destruct (hash_lookup_adds_None_invert Hs1) as [tb_b lwp_b].
-      pose (w'' := eloise_win s_res s_play m0 w').
-      epose proof (tb_None _ v w'') as Hw'.
-      unfold tb_lookup in Hw'.
-      rewrite s_play in Hw'.
-      assert (P b) as b_p by now apply Pnorm_to_P.
-      specialize (Hw' b_p lwp_b).
-      simpl in Hw'.
-      rewrite map_map in tb_b; simpl in tb_b.
-      rewrite map_id in tb_b.
-      rewrite PeanoNat.Nat.le_ngt.
-      intro pf.
-      assert (S (depth w') = (curr tb)) by lia.
-      apply tb_b.
-      eapply (mate_lbp _ v b_p s_play).
-      exists w''; split; auto.
-      intro. simpl. rewrite H8.
-      eapply (tb_None _ v); auto.
-      unfold tb_lookup.
-      now rewrite s_play.
+      apply chash_lookup_adds_None_invert in Hs1; auto.
+      * destruct Hs1 as [tb_b lwp_b].
+        pose (w'' := eloise_win s_res s_play m0 w').
+        epose proof (tb_None _ v w'') as Hw'.
+        unfold tb_lookup in Hw'.
+        rewrite s_play in Hw'.
+        assert (P b) as b_p by now apply Pnorm_to_P.
+        specialize (Hw' b_p lwp_b).
+        simpl in Hw'.
+        rewrite map_map in tb_b; simpl in tb_b.
+        rewrite map_id in tb_b.
+        rewrite PeanoNat.Nat.le_ngt.
+        intro pf.
+        assert (S (depth w') = (curr tb)) by lia.
+        apply tb_b.
+        eapply (mate_lbp _ v b_p s_play).
+        exists w''; split; auto.
+        intro. simpl. rewrite H9.
+        eapply (tb_None _ v); auto.
+        unfold tb_lookup.
+        now rewrite s_play.
+      * admit.
   (* lwp_NoDup *)
   - simpl.
     destruct last_step.
     + unfold abelard_step.
-      apply NoDup_nodup.
+      apply NoDup_cond_nodup.
     + unfold eloise_step.
-      apply NoDup_nodup.
+      apply NoDup_cond_nodup.
   (* lbp_NoDup *)
   - simpl.
     destruct last_step.
     + unfold abelard_step.
-      apply NoDup_nodup.
+      apply NoDup_cond_nodup.
     + unfold eloise_step.
-      apply NoDup_nodup.
+      apply NoDup_cond_nodup.
   (* lwp_disj *)
   - simpl.
     intros s HIn.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' _].
       rewrite filter_dec_In in HIn'.
@@ -1491,7 +1712,7 @@ Proof.
       rewrite tb_step in HIn'.
       tauto.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       rewrite In_filter_Nones_iff in HIn.
       rewrite tb_step in HIn.
@@ -1501,7 +1722,7 @@ Proof.
     intros s HIn.
     destruct (last_step tb) eqn:tb_step.
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' _].
       rewrite filter_dec_In in HIn'.
@@ -1509,7 +1730,7 @@ Proof.
       rewrite tb_step in HIn'.
       tauto.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       rewrite In_filter_Nones_iff in HIn.
       rewrite tb_step in HIn.
@@ -1518,7 +1739,7 @@ Proof.
   - simpl; intros s HIn.
     destruct (last_step tb).
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' _].
       rewrite filter_dec_In in HIn'.
@@ -1536,7 +1757,7 @@ Proof.
       rewrite to_play_normalize.
       now apply opp_inj.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       rewrite In_filter_Nones_iff in HIn.
       destruct HIn as [[_ HIn'] _].
@@ -1555,7 +1776,7 @@ Proof.
   - simpl; intros s HIn.
     destruct (last_step tb).
     + unfold abelard_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_In in HIn.
       destruct HIn as [HIn' _].
       rewrite filter_dec_In in HIn'.
@@ -1573,7 +1794,7 @@ Proof.
       rewrite to_play_normalize.
       now apply opp_inj.
     + unfold eloise_step in HIn.
-      rewrite nodup_In in HIn.
+      rewrite cond_nodup_In in HIn.
       rewrite filter_dec_In in HIn.
       rewrite In_filter_Nones_iff in HIn.
       destruct HIn as [[_ HIn'] _].
@@ -1588,7 +1809,7 @@ Proof.
       rewrite to_play_exec_move in sm_play.
       rewrite to_play_normalize.
       now apply opp_inj.
-Defined.
+Admitted.
 
 Definition TB_validity_data : validity_data TB_loop_data.
 Proof.
@@ -1788,27 +2009,27 @@ Proof.
   intros.
   unfold num_left.
   simpl.
-  destruct (good_to_list _ (white_good _ X0)) as [ws Hws].
-  destruct (good_to_list _ (black_good _ X0)) as [bs Hbs].
+  destruct (cgood_to_list _ (white_good _ X0)) as [ws Hws].
+  destruct (cgood_to_list _ (black_good _ X0)) as [bs Hbs].
   unfold add_positions.
-  repeat rewrite hash_size_adds; try
+  repeat rewrite chash_size_adds; try
   (rewrite map_map;
     unfold tag;
     simpl;
     rewrite map_id).
   - repeat rewrite map_length.
-    rewrite (to_list_size _ _ Hws).
-    rewrite (to_list_size _ _ Hbs).
+    rewrite (cto_list_size _ _ Hws).
+    rewrite (cto_list_size _ _ Hbs).
     assert (
       length (last_white_positions tb) +
       length (last_black_positions tb) > 0).
     { destruct (to_play s) eqn:s_play.
       + assert (In (normalize s) (last_white_positions tb)).
         { eapply (mate_lwp _ X0); eauto. }
-        pose (In_length_pos _ _ H9); lia.
+        pose (In_length_pos _ _ H10); lia.
       + assert (In (normalize s) (last_black_positions tb)).
         { eapply (mate_lbp _ X0); eauto. }
-        pose (In_length_pos _ _ H9); lia.
+        pose (In_length_pos _ _ H10); lia.
     }
     assert (
       length (last_white_positions tb) +
@@ -1840,13 +2061,16 @@ Proof.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n']] [? HInw]].
                 simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hws) in HInw.
-                pose (lwp_disj _ X0 _ Hw); congruence.
+                rewrite <- (clookup_in _ _ Hws) in HInw.
+                ** pose (lwp_disj _ X0 _ Hw); congruence.
+                ** admit.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n]] [? Hinb]].
                 simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hbs) in Hinb.
-                pose (tb_black _ X0 Hinb).
+                assert (P s') as p.
+                { admit. }
+                rewrite <- (clookup_in _ _ Hbs) in Hinb; auto.
+                pose (tb_black _ X0 p Hinb).
                 pose (lwp_white _ X0 _ Hw).
                 congruence.
           -- rewrite filter_In.
@@ -1859,14 +2083,18 @@ Proof.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n]] [? Hinw]].
                 simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hws) in Hinw.
-                pose (tb_white _ X0 Hinw).
+                assert (P s') as p.
+                { admit. }
+                rewrite <- (clookup_in _ _ Hws) in Hinw; auto.
+                pose (tb_white _ X0 p Hinw).
                 pose (lbp_black _ X0 _ Hb).
                 congruence.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n']] [? HInb]].
                 simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hbs) in HInb.
+                assert (P s') as p.
+                { admit. }
+                rewrite <- (clookup_in _ _ Hbs) in HInb; auto.
                 pose (lbp_disj _ X0 _ Hb); congruence.
       + rewrite <- (map_length fst (ws ++ bs)).
         apply filter_count_lemma.
@@ -1876,11 +2104,12 @@ Proof.
           rewrite in_map_iff in Hxw, Hxb.
           destruct Hxw as [[x' [pl' n']] [? HInw]]; subst.
           destruct Hxb as [[x'' [pl'' n'']] [? HInb]]; simpl in *; subst.
-          rewrite <- (lookup_in _ _ Hws) in HInw.
-          rewrite <- (lookup_in _ _ Hbs) in HInb.
-          pose (tb_white _ X0 HInw).
-          pose (tb_black _ X0 HInb).
-          congruence.
+          rewrite <- (clookup_in _ _ Hws) in HInw;
+          rewrite <- (clookup_in _ _ Hbs) in HInb.
+          -- admit. (*TODO*)
+          -- admit.
+          -- admit.
+          -- admit.
         * intros s' _.
           apply enum_states_correct.
         * intros y HIn.
@@ -1889,10 +2118,12 @@ Proof.
     }
     lia.
   - apply (lbp_NoDup _ X0).
+  - admit.
   - apply (lbp_disj _ X0).
   - apply (lwp_NoDup _ X0).
+  - admit.
   - apply (lwp_disj _ X0).
-Qed.
+Admitted.
 
 Lemma no_final_curr_mate pl (s : GameState G) :
   P s ->
@@ -1905,7 +2136,7 @@ Proof.
   simpl in *; lia.
 Qed.
 
-Theorem TB_final_lookup_mate : forall s pl n,
+Theorem TB_final_lookup_mate : forall s pl n, P s ->
   tb_lookup TB_final s = Some (pl, n) ->
   mate pl s n.
 Proof.
@@ -1960,24 +2191,32 @@ Proof.
       apply enum_states_correct.
     }
     destruct (to_play s) eqn:s_play.
-    + assert (In (normalize s, (Black, 0)) (map (tag Black 0) (nodup IntHash_dec (enum_norm_wins Black)))) as Hs.
-      { rewrite in_map_iff.
+    + assert (forall pf, In (normalize s, (Black, 0)) (map (tag Black 0) (cond_nodup CondIntHash_dec (enum_norm_wins Black) pf))) as Hs.
+      { intro pf.
+        rewrite in_map_iff.
         exists (normalize s); split; [reflexivity|].
-        rewrite nodup_In.
+        rewrite cond_nodup_In.
         erewrite atomic_win_opp in s_play; [|exact s_res].
         apply enum_norm_wins_correct2; auto. now destruct pl.
       }
-      pose proof (hash_adds_ne_pos (map (tag Black 0) (nodup IntHash_dec (enum_norm_wins Black)))
-        (normalize s) (Black, 0) Hs); lia.
-    + assert (In (normalize s, (White, 0)) (map (tag White 0) (nodup IntHash_dec (enum_norm_wins White)))) as Hs.
-      { rewrite in_map_iff.
+      exfalso.
+      do 2 rewrite PeanoNat.Nat.sub_0_r in Hmeasure.
+      assert (forall x y z, x > 0 -> y > 0 -> ~ x = x - y - z) as arith by lia.
+      unshelve eapply (arith _ _ _ H9 _ Hmeasure).
+      eapply chash_adds_ne_pos; apply Hs.
+    + assert (forall pf, In (normalize s, (White, 0)) (map (tag White 0) (cond_nodup CondIntHash_dec (enum_norm_wins White) pf))) as Hs.
+      { intro pf.
+        rewrite in_map_iff.
         exists (normalize s); split; [reflexivity|].
-        rewrite nodup_In.
+        rewrite cond_nodup_In.
         erewrite atomic_win_opp in s_play; [|exact s_res].
-        apply enum_norm_wins_correct2; now destruct pl.
+        apply enum_norm_wins_correct2; auto. now destruct pl.
       }
-      pose proof (hash_adds_ne_pos (map (tag White 0) (nodup IntHash_dec (enum_norm_wins White)))
-        (normalize s) (White, 0) Hs); lia.
+      exfalso.
+      do 2 rewrite PeanoNat.Nat.sub_0_r in Hmeasure.
+      assert (forall x y z, x > 0 -> z > 0 -> ~ x = x - y - z) as arith by lia.
+      unshelve eapply (arith _ _ _ H9 _ Hmeasure).
+      eapply chash_adds_ne_pos; apply Hs.
   - intros s pl s_p s_res.
     apply mate_TB_final_lookup; auto.
     exists (atom_win s_res).
@@ -1985,7 +2224,6 @@ Proof.
     intro; simpl; lia.
 Qed.
 
-(* todo *)
 Lemma TB_lookup_None_eloise : forall p s,
   P s ->
   to_play s = p ->
@@ -2019,7 +2257,7 @@ Proof.
           destruct (in_map_sig pf) as [[pl' k] [tb_sm HIn]].
           pose proof (player_eqb_true _ _ (Hps2 _ HIn)); simpl in *; subst.
           symmetry in tb_sm.
-          destruct (TB_final_lookup_mate _ _ _ tb_sm) as [w [w_d _]].
+          destruct (TB_final_lookup_mate _ _ _ (closed s s_p m) tb_sm) as [w [w_d _]].
           exists w.
           rewrite w_d.
           eapply (tb_small _ TB_final_valid); eauto.
@@ -2057,7 +2295,7 @@ Proof.
         rewrite <- Hps in pf.
         rewrite in_map_iff in pf.
         destruct pf as [m [tb_sm _]].
-        destruct (TB_final_lookup_mate _ _ _ tb_sm) as [w [w_d _]].
+        destruct (TB_final_lookup_mate _ _ _ (closed s s_p m) tb_sm) as [w [w_d _]].
         apply (no_final_curr_mate (to_play s) s); auto.
         pose (w' := eloise_win s_res eq_refl m w).
         pose proof (tb_None _ TB_final_valid w' s_p tb_s) as pf.
@@ -2094,7 +2332,7 @@ Proof.
       destruct (player_id_or_opp pl p) as [|pf]; auto.
       exfalso.
       apply (no_final_curr_mate (to_play s) s); auto.
-      pose proof (TB_final_lookup_mate _ pl n Hm) as mt.
+      pose proof (TB_final_lookup_mate _ pl n (closed s s_p m) Hm) as mt.
       destruct mt as [w [w_depth w_min]].
       rewrite <- pf in s_play.
       rewrite opp_invol in s_play.
@@ -2135,7 +2373,8 @@ Proof.
         -- exact Hm.
       * apply win_no_worse.
         apply TB_final_lookup_mate in Hmn.
-        exact (projT1 Hmn).
+        -- exact (projT1 Hmn).
+        -- now apply closed.
 Defined.
 
 Theorem TB_final_lookup_draw : forall s,
@@ -2149,13 +2388,14 @@ Proof.
 Defined.
 
 Theorem draw_TB_final_lookup : forall s,
+  P s ->
   draw s ->
   tb_lookup TB_final s = None.
 Proof.
-  intros s d.
+  intros s s_p d.
   destruct (tb_lookup TB_final s) eqn:tb_s; [|reflexivity].
   destruct p as [pl n].
-  destruct (TB_final_lookup_mate _ _ _ tb_s).
+  destruct (TB_final_lookup_mate _ _ _ s_p tb_s).
   elim (win_not_draw _ _ x d).
 Qed.
 
