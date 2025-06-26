@@ -550,6 +550,10 @@ Record TB_valid (tb : TB) : Type := {
 
   lbp_black : forall s, In s (last_black_positions tb) -> to_play s = Black;
 
+  lwp_P : forall s, In s (last_white_positions tb) -> P s;
+
+  lbp_P : forall s, In s (last_black_positions tb) -> P s;
+
   }.
 
 Lemma step_player_white (tb : TB) (v : TB_valid tb) :
@@ -599,6 +603,13 @@ Proof.
       * now inversion nd_xs.
       * intros y in_y_xs' in_y_ys.
         apply (d_xs_ys y); [now right|auto].
+Qed.
+
+Lemma P_norm : forall s, P s -> P (normalize s).
+Proof.
+  intros s p.
+  apply bisim_closed with (s := s); auto.
+  apply normalize_bisim.
 Qed.
 
 Lemma TB_init_valid : TB_valid TB_init.
@@ -669,6 +680,30 @@ Proof.
     rewrite <- Hss'.
     rewrite to_play_normalize.
     now rewrite (atomic_win_opp _ _ s'_res).
+  - intros s HIn.
+    simpl in HIn.
+    rewrite cond_nodup_In in HIn.
+    unfold enum_norm_wins in HIn.
+    rewrite cond_nodup_In in HIn.
+    rewrite in_map_iff in HIn.
+    destruct HIn as [s' [Hs'1 Hs'2]].
+    subst.
+    apply P_norm.
+    pose proof (enum_P_wins_correct3 Black) as pf.
+    rewrite Forall_forall in pf.
+    apply pf; auto.
+  - intros s HIn.
+    simpl in HIn.
+    rewrite cond_nodup_In in HIn.
+    unfold enum_norm_wins in HIn.
+    rewrite cond_nodup_In in HIn.
+    rewrite in_map_iff in HIn.
+    destruct HIn as [s' [Hs'1 Hs'2]].
+    subst.
+    apply P_norm.
+    pose proof (enum_P_wins_correct3 White) as pf.
+    rewrite Forall_forall in pf.
+    apply pf; auto.
 Defined.
 
 Lemma map_tag_functional : forall pl n ps,
@@ -797,13 +832,6 @@ Proof.
         split; [now right|tauto].
 Defined.
 
-Lemma P_norm : forall s, P s -> P (normalize s).
-Proof.
-  intros s p.
-  apply bisim_closed with (s := s); auto.
-  apply normalize_bisim.
-Qed. 
-
 Lemma TB_step_valid : forall tb, TB_valid tb
   -> TB_valid (TB_step tb).
 Proof.
@@ -817,7 +845,11 @@ Proof.
       simpl.
       rewrite map_id.
       exact (lwp_NoDup _ v).
-    + admit.
+    + rewrite map_map.
+      unfold tag; simpl.
+      rewrite map_id.
+      rewrite Forall_forall.
+      apply v.
     + intros s [pl n] HIn.
       apply (lwp_disj _ v).
       rewrite in_map_iff in HIn.
@@ -831,7 +863,11 @@ Proof.
       simpl.
       rewrite map_id.
       exact (lbp_NoDup _ v).
-    + admit.
+    + rewrite map_map.
+      unfold tag; simpl.
+      rewrite map_id.
+      rewrite Forall_forall.
+      apply v.
     + intros s [pl n] HIn.
       apply (lbp_disj _ v).
       rewrite in_map_iff in HIn.
@@ -847,7 +883,11 @@ Proof.
       * simpl.
         unfold add_positions.
         rewrite chash_lookup_adds_nIn; auto.
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
         -- apply P_norm; auto.
         -- rewrite map_map.
            unfold tag; simpl.
@@ -857,7 +897,11 @@ Proof.
       * simpl.
         unfold add_positions.
         rewrite chash_lookup_adds_nIn; auto.
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
         -- apply P_norm; auto.
         -- rewrite map_map.
            unfold tag; simpl.
@@ -871,7 +915,11 @@ Proof.
         unfold add_positions.
         erewrite chash_lookup_adds;
         [reflexivity| apply map_tag_functional| |].
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
         -- rewrite in_map_iff.
            exists (normalize s).
            rewrite pf' in sm.
@@ -883,7 +931,11 @@ Proof.
         unfold add_positions.
         erewrite chash_lookup_adds;
         [reflexivity| apply map_tag_functional| |].
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
         -- rewrite in_map_iff.
            exists (normalize s).
            rewrite pf' in sm.
@@ -908,7 +960,11 @@ Proof.
            unfold tb_lookup.
            now rewrite s_play.
       * apply P_norm; auto.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
     + simpl in Htb.
       unfold add_positions in Htb.
       apply chash_lookup_adds_invert in Htb.
@@ -922,34 +978,33 @@ Proof.
            unfold tb_lookup.
            now rewrite s_play.
       * apply P_norm; auto.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
   (* tb_small *)
   - intros s pl n Htb.
     unfold tb_lookup in Htb.
     destruct (to_play s) eqn:s_play; simpl in *.
-    + apply chash_lookup_adds_invert in Htb.
-      * destruct Htb as [pf|pf].
-        -- rewrite in_map_iff in pf.
-           destruct pf as [s' [Hs'1 Hs'2]].
-           inversion Hs'1; lia.
-        -- cut (n < curr tb); [lia|].
-           eapply (tb_small _ v).
-           unfold tb_lookup; rewrite s_play; eauto.
-      * admit. (*FIXME*)
-      * rewrite map_map.
-        unfold tag.
-        rewrite map_id.
-        admit.
-    + apply chash_lookup_adds_invert in Htb.
-      * destruct Htb as [pf|pf].
-        -- rewrite in_map_iff in pf.
-           destruct pf as [s' [Hs'1 Hs'2]].
-           inversion Hs'1; lia.
-        -- cut (n < curr tb); [lia|].
-           eapply (tb_small _ v).
-           unfold tb_lookup; rewrite s_play; eauto.
-      * admit.
-      * admit.
+    + apply chash_lookup_adds_invert2 in Htb.
+      destruct Htb as [pf|pf].
+      * destruct pf as [s' Hs'].
+        rewrite in_map_iff in Hs'.
+        destruct Hs' as [s'' [Hs'' _]].
+        inversion Hs''; lia.
+      * cut (n < curr tb); [lia|].
+        eapply (tb_small _ v).
+        unfold tb_lookup; rewrite s_play; eauto.
+    + apply chash_lookup_adds_invert2 in Htb.
+      destruct Htb as [pf|pf].
+      * destruct pf as [s' Hs'].
+        rewrite in_map_iff in Hs'.
+        destruct Hs' as [s'' [Hs'' _]].
+        inversion Hs''; lia.
+      * cut (n < curr tb); [lia|].
+        eapply (tb_small _ v).
+        unfold tb_lookup; rewrite s_play; eauto.
   (* tb_white *)
   - intros s pl n s_p Htb.
     simpl in Htb.
@@ -960,7 +1015,11 @@ Proof.
         inversion Hs'1; subst.
         now apply (lwp_white _ v).
       * eapply (tb_white _ v); auto; exact pf.
-    + admit.
+    + rewrite map_map.
+      unfold tag; simpl.
+      rewrite map_id.
+      rewrite Forall_forall.
+      apply v.
   (* tb_black *)
   - intros s pl n s_p Htb.
     simpl in Htb.
@@ -971,7 +1030,11 @@ Proof.
         inversion Hs'1; subst.
         now apply (lbp_black _ v).
       * eapply (tb_black _ v); auto; exact pf.
-    + admit.
+    + rewrite map_map.
+      unfold tag; simpl.
+      rewrite map_id.
+      rewrite Forall_forall.
+      apply v.
   (* tb_None *)
   - intros s pl w s_p tb_s.
     unfold tb_lookup in tb_s.
@@ -997,7 +1060,11 @@ Proof.
         rewrite e.
         apply (tb_None _ v w'); auto.
         unfold tb_lookup; now rewrite s_play.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
       * apply P_norm; auto.
     + apply chash_lookup_adds_None_invert in tb_s.
       * destruct tb_s as [s_lwp tb'_s].
@@ -1019,7 +1086,11 @@ Proof.
         rewrite e.
         apply (tb_None _ v w'); auto.
         unfold tb_lookup; now rewrite s_play.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
       * apply P_norm; auto.
   (* mate_lwp *)
   - intros s pl s_p s_play sm; simpl in *.
@@ -1050,7 +1121,11 @@ Proof.
                  specialize (m pf).
                  pose (mate_eq sm m); lia.
            ++ apply P_norm; auto.
-           ++ admit.
+           ++ rewrite map_map.
+              unfold tag; simpl.
+              rewrite map_id.
+              rewrite Forall_forall.
+              apply v.
         -- destruct (mate_S_lemma _ v s_p sm) as [m smm].
            apply (mate_lbp _ v) in smm; [|now apply closed |now rewrite 
              to_play_exec_move, s_play].
@@ -1103,7 +1178,11 @@ Proof.
                      { apply closed; apply P_norm; auto. }
                      destruct (m0 _ _ p pf); eauto.
            ++ apply P_norm; apply closed; apply P_norm; auto.
-           ++ admit.
+           ++ rewrite map_map.
+              unfold tag; simpl.
+              rewrite map_id.
+              rewrite Forall_forall.
+              apply v.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
            apply chash_lookup_adds_None_invert in tb_sm.
@@ -1156,7 +1235,11 @@ Proof.
               ** apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
                  exact X.
                  apply exec_back.
-           ++ admit.
+           ++ rewrite map_map.
+              unfold tag; simpl.
+              rewrite map_id.
+              rewrite Forall_forall.
+              apply v.
            ++ apply P_norm; apply closed; apply P_norm; auto.
     + unfold eloise_step.
       rewrite cond_nodup_In.
@@ -1182,7 +1265,11 @@ Proof.
               specialize (m s_p pf).
               pose (mate_eq sm m); lia.
         -- apply P_norm; auto.
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
       * destruct (mate_S_lemma _ v s_p sm) as [m smm].
         pose proof (inv_forward_correct _ _ _ s m _ (normalize_bisim _)).
         pose proof (exec_inv_forward _ _ _ s m _ (normalize_bisim _)).
@@ -1272,7 +1359,11 @@ Proof.
             rewrite to_play_normalize in l.
             rewrite t_play in l; specialize (l tb_sm); lia.
         + apply P_norm; apply closed; auto.
-        + admit.
+        + rewrite map_map.
+          unfold tag; simpl.
+          rewrite map_id.
+          rewrite Forall_forall.
+          apply v.
       }
       pose (w' := @abelard_win _ Black _ t_res t_play (fun m => projT1 (X m))).
       apply mate_to_normal_mate.
@@ -1353,7 +1444,11 @@ Proof.
         eapply (tb_None _ v); auto.
         unfold tb_lookup.
         now rewrite s_play.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
   (* mate_lbp *)
   - intros s pl s_p s_play sm; simpl in *.
     destruct (last_step tb) eqn:tb_step.
@@ -1383,7 +1478,11 @@ Proof.
                  specialize (m s_p pf).
                  pose (mate_eq sm m); lia.
             ++ apply P_norm; auto.
-            ++ admit.
+            ++ rewrite map_map.
+               unfold tag; simpl.
+               rewrite map_id.
+               rewrite Forall_forall.
+               apply v.
         -- destruct (mate_S_lemma _ v s_p sm) as [m smm].
            apply (mate_lwp _ v) in smm; [| now apply closed |now rewrite 
              to_play_exec_move, s_play].
@@ -1436,7 +1535,11 @@ Proof.
                      { apply closed; apply P_norm; auto. }
                      destruct (m0 _ _ p pf); eauto.
            ++ apply P_norm; apply closed; apply P_norm; auto.
-           ++ admit.
+           ++ rewrite map_map.
+              unfold tag; simpl.
+              rewrite map_id.
+              rewrite Forall_forall.
+              apply v.
         -- subst.
            rewrite tb_step in tb_sm; simpl in *.
            apply chash_lookup_adds_None_invert in tb_sm.
@@ -1487,7 +1590,11 @@ Proof.
               ** apply bisim_mate with (B := auto) (s' := exec_move (normalize b) m) in X.
                  exact X.
                  apply exec_back.
-        ++ admit.
+        ++ rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
         ++ apply P_norm; apply closed; apply P_norm; auto.
     + unfold eloise_step.
       rewrite cond_nodup_In.
@@ -1513,7 +1620,11 @@ Proof.
               specialize (m s_p pf).
               pose (mate_eq sm m); lia.
         -- apply P_norm; auto.
-        -- admit.
+        -- rewrite map_map.
+           unfold tag; simpl.
+           rewrite map_id.
+           rewrite Forall_forall.
+           apply v.
       * destruct (mate_S_lemma _ v s_p sm) as [m smm].
         pose proof (inv_forward_correct _ _ _ s m _ (normalize_bisim _)).
         pose proof (exec_inv_forward _ _ _ s m _ (normalize_bisim _)).
@@ -1603,7 +1714,11 @@ Proof.
             rewrite to_play_normalize in l.
             rewrite t_play in l; specialize (l tb_sm); lia.
         + apply P_norm; apply closed; auto.
-        + admit.
+        + rewrite map_map.
+          unfold tag; simpl.
+          rewrite map_id.
+          rewrite Forall_forall.
+          apply v.
         }
       pose (w' := @abelard_win _ White _ t_res t_play (fun m => projT1 (X m))).
       apply mate_to_normal_mate.
@@ -1684,7 +1799,11 @@ Proof.
         eapply (tb_None _ v); auto.
         unfold tb_lookup.
         now rewrite s_play.
-      * admit.
+      * rewrite map_map.
+        unfold tag; simpl.
+        rewrite map_id.
+        rewrite Forall_forall.
+        apply v.
   (* lwp_NoDup *)
   - simpl.
     destruct last_step.
@@ -1809,7 +1928,29 @@ Proof.
       rewrite to_play_exec_move in sm_play.
       rewrite to_play_normalize.
       now apply opp_inj.
-Admitted.
+  - simpl; intros s HIn.
+    destruct last_step.
+    + unfold abelard_step in HIn.
+      rewrite cond_nodup_In in HIn.
+      rewrite filter_In in HIn.
+      rewrite filter_dec_In in HIn.
+      tauto.
+    + unfold eloise_step in HIn.
+      rewrite cond_nodup_In in HIn.
+      rewrite filter_dec_In in HIn.
+      tauto.
+  - simpl; intros s HIn.
+    destruct last_step.
+    + unfold abelard_step in HIn.
+      rewrite cond_nodup_In in HIn.
+      rewrite filter_In in HIn.
+      rewrite filter_dec_In in HIn.
+      tauto.
+    + unfold eloise_step in HIn.
+      rewrite cond_nodup_In in HIn.
+      rewrite filter_dec_In in HIn.
+      tauto.
+Defined.
 
 Definition TB_validity_data : validity_data TB_loop_data.
 Proof.
@@ -2063,12 +2204,11 @@ Proof.
                 simpl in *; subst.
                 rewrite <- (clookup_in _ _ Hws) in HInw.
                 ** pose (lwp_disj _ X0 _ Hw); congruence.
-                ** admit.
+                ** apply (lwp_P _ X0); auto.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n]] [? Hinb]].
                 simpl in *; subst.
-                assert (P s') as p.
-                { admit. }
+                assert (P s') as p by (apply (lwp_P _ X0); auto).
                 rewrite <- (clookup_in _ _ Hbs) in Hinb; auto.
                 pose (tb_black _ X0 p Hinb).
                 pose (lwp_white _ X0 _ Hw).
@@ -2083,8 +2223,7 @@ Proof.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n]] [? Hinw]].
                 simpl in *; subst.
-                assert (P s') as p.
-                { admit. }
+                assert (P s') as p by (apply (lbp_P _ X0); auto).
                 rewrite <- (clookup_in _ _ Hws) in Hinw; auto.
                 pose (tb_white _ X0 p Hinw).
                 pose (lbp_black _ X0 _ Hb).
@@ -2092,8 +2231,7 @@ Proof.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n']] [? HInb]].
                 simpl in *; subst.
-                assert (P s') as p.
-                { admit. }
+                assert (P s') as p by (apply (lbp_P _ X0); auto).
                 rewrite <- (clookup_in _ _ Hbs) in HInb; auto.
                 pose (lbp_disj _ X0 _ Hb); congruence.
       + rewrite <- (map_length fst (ws ++ bs)).
@@ -2103,7 +2241,8 @@ Proof.
           intros x Hxw Hxb.
           rewrite in_map_iff in Hxw, Hxb.
           destruct Hxw as [[x' [pl' n']] [? HInw]]; subst.
-          destruct Hxb as [[x'' [pl'' n'']] [? HInb]]; simpl in *; subst.
+          destruct Hxb as [[x'' [pl'' n'']] [? HInb]];
+            simpl in *; subst.
           rewrite <- (clookup_in _ _ Hws) in HInw;
           rewrite <- (clookup_in _ _ Hbs) in HInb.
           -- admit. (*TODO*)
@@ -2118,10 +2257,12 @@ Proof.
     }
     lia.
   - apply (lbp_NoDup _ X0).
-  - admit.
+  - rewrite Forall_forall.
+    apply (lbp_P _ X0).
   - apply (lbp_disj _ X0).
   - apply (lwp_NoDup _ X0).
-  - admit.
+  - rewrite Forall_forall.
+    apply (lwp_P _ X0).
   - apply (lwp_disj _ X0).
 Admitted.
 

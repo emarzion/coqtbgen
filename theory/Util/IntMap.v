@@ -545,6 +545,27 @@ Proof.
         now rewrite Hx'x in n.
 Defined.
 
+Lemma chash_lookup_adds_invert2 (ps : list (X * Y)) :
+  forall (m : M Y) (x : X) (y : Y),
+  chash_lookup x (chash_adds ps m) = Some y ->
+  { exists x', In (x',y) ps } + { chash_lookup x m = Some y }.
+Proof.
+  induction ps as [|[x y] qs]; intros m x' y' Hx'.
+  - right; exact Hx'.
+  - simpl in Hx'.
+    destruct (IHqs _ _ _ Hx') as [pf|pf].
+    + left. destruct pf as [x'' Hx''].
+      exists x''; right; auto.
+    + destruct (eq_dec (chash x') (chash x)).
+      * unfold chash_lookup, chash_add in pf.
+        rewrite e in pf.
+        rewrite lookup_add in pf.
+        inversion pf; subst.
+        left; exists x; left; reflexivity.
+      * unfold chash_lookup, chash_add in pf.
+        rewrite lookup_add_neq in pf; auto.
+Defined.
+
 Lemma cgood_to_list (m : M Y) (g : cgood m) : exists (ps : list (X * Y)),
   cmap_list_equiv m ps.
 Proof.
