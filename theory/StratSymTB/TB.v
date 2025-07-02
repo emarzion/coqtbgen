@@ -2202,17 +2202,21 @@ Proof.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n']] [? HInw]].
                 simpl in *; subst.
-                rewrite <- (clookup_in _ _ Hws) in HInw.
-                ** pose (lwp_disj _ X0 _ Hw); congruence.
-                ** apply (lwp_P _ X0); auto.
+                assert (chash_lookup s' (white_positions tb) = Some (pl', n')) as pf.
+                { rewrite (clookup_in _ _ Hws).
+                  exists s'; split; auto.
+                }
+                pose (lwp_disj _ X0 _ Hw); congruence.
              ++ rewrite in_map_iff in pf.
                 destruct pf as [[s'' [pl' n]] [? Hinb]].
                 simpl in *; subst.
-                assert (P s') as p by (apply (lwp_P _ X0); auto).
-                rewrite <- (clookup_in _ _ Hbs) in Hinb; auto.
-                pose (tb_black _ X0 p Hinb).
-                pose (lwp_white _ X0 _ Hw).
-                congruence.
+                assert (chash_lookup s' (black_positions tb) = Some (pl', n)) as pf.
+                { rewrite (clookup_in _ _ Hbs).
+                  exists s'; split; auto.
+                }
+                apply tb_black in pf; auto.
+                ** apply lwp_white in Hw; congruence.
+                ** apply lwp_P with (tb := tb); auto.
           -- rewrite filter_In.
              split; [apply enum_states_correct|].
              unfold in_decb.
@@ -2221,18 +2225,22 @@ Proof.
              rewrite in_app_iff in pf.
              destruct pf as [pf|pf].
              ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n]] [? Hinw]].
+                destruct pf as [[s'' [pl' n]] [? Hinb]].
                 simpl in *; subst.
-                assert (P s') as p by (apply (lbp_P _ X0); auto).
-                rewrite <- (clookup_in _ _ Hws) in Hinw; auto.
-                pose (tb_white _ X0 p Hinw).
-                pose (lbp_black _ X0 _ Hb).
-                congruence.
+                assert (chash_lookup s' (white_positions tb) = Some (pl', n)) as pf.
+                { rewrite (clookup_in _ _ Hws).
+                  exists s'; split; auto.
+                }
+                apply tb_white in pf; auto.
+                ** apply lbp_black in Hb; congruence.
+                ** apply lbp_P with (tb := tb); auto.
              ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n']] [? HInb]].
+                destruct pf as [[s'' [pl' n']] [? HInw]].
                 simpl in *; subst.
-                assert (P s') as p by (apply (lbp_P _ X0); auto).
-                rewrite <- (clookup_in _ _ Hbs) in HInb; auto.
+                assert (chash_lookup s' (black_positions tb) = Some (pl', n')) as pf.
+                { rewrite (clookup_in _ _ Hbs).
+                  exists s'; split; auto.
+                }
                 pose (lbp_disj _ X0 _ Hb); congruence.
       + rewrite <- (map_length fst (ws ++ bs)).
         apply filter_count_lemma.
@@ -2243,12 +2251,23 @@ Proof.
           destruct Hxw as [[x' [pl' n']] [? HInw]]; subst.
           destruct Hxb as [[x'' [pl'' n'']] [? HInb]];
             simpl in *; subst.
-          rewrite <- (clookup_in _ _ Hws) in HInw;
-          rewrite <- (clookup_in _ _ Hbs) in HInb.
-          -- admit. (*TODO*)
-          -- admit.
-          -- admit.
-          -- admit.
+          assert (chash_lookup x' (white_positions tb) = Some (pl', n')).
+          { rewrite (clookup_in _ _ Hws).
+            exists x'; split; auto.
+          }
+          assert (chash_lookup x' (black_positions tb) = Some (pl'', n'')).
+          { rewrite (clookup_in _ _ Hbs).
+            exists x'; split; auto.
+          }
+          assert (P x') as p.
+          { pose proof (all_P _ _ Hws) as pf.
+            rewrite Forall_forall in pf.
+            apply pf.
+            apply in_map with (f := fst) in HInw; auto.
+          }
+          apply tb_white with (tb := tb) in H11; auto.
+          apply tb_black with (tb := tb) in H12; auto.
+          congruence.
         * intros s' _.
           apply enum_states_correct.
         * intros y HIn.
@@ -2264,7 +2283,7 @@ Proof.
   - rewrite Forall_forall.
     apply (lwp_P _ X0).
   - apply (lwp_disj _ X0).
-Admitted.
+Defined.
 
 Lemma no_final_curr_mate pl (s : GameState G) :
   P s ->

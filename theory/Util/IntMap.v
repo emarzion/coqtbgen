@@ -413,7 +413,7 @@ Fixpoint chash_adds (ps : list (X * Y)) (m : M Y) {struct ps} : M Y :=
 
 Inductive cgood : M Y -> Prop :=
   | cgood_e : cgood empty
-  | cgood_a {x y m} : cgood m -> chash_lookup x m = None -> P x -> cgood (chash_add x y m).
+  | cgood_a {x y m} : P x -> cgood m -> chash_lookup x m = None -> cgood (chash_add x y m).
 
 Fixpoint cgood_as {ps : list (X * Y)}
   {m : M Y} (pf : cgood m) (nd : NoDup (map fst ps))
@@ -446,8 +446,10 @@ Qed.
 
 Record cmap_list_equiv (m : M Y) (ps : list (X * Y)) : Prop := {
   cto_list_size : size m = List.length ps;
+  all_P : Forall P (map fst ps);
   ckeys_unique : NoDup (map fst ps);
-  clookup_in {x y} : P x -> chash_lookup x m = Some y <-> In (x,y) ps;
+  clookup_in {x y} : chash_lookup x m = Some y <-> exists x',
+    chash x = chash x' /\ In (x',y) ps;
   }.
 
 Lemma chash_adds_add {ps : list (X * Y)} : forall x y m,
@@ -573,42 +575,53 @@ Proof.
   - exists nil; constructor.
     + now rewrite size_empty.
     + constructor.
+    + constructor.
     + intros x y.
       unfold chash_lookup.
-      now rewrite lookup_empty.
-  - destruct IHg as [ps [tl_sz key_un l_in]].
+      rewrite lookup_empty.
+      split.
+      * congruence.
+      * intros [? [? []]].
+  - destruct IHg as [ps [tl_sz key_P key_un l_in]].
     exists ((x,y) :: ps); constructor.
     + unfold chash_add.
-      unfold chash_lookup in H1.
+      unfold chash_lookup in H2.
       rewrite size_add.
-      rewrite H1.
+      rewrite H2.
       simpl; congruence.
+    + constructor; auto.
     + simpl; constructor; auto.
       intro HIn.
       rewrite in_map_iff in HIn.
       destruct HIn as [[str x'] [Hx1 Hx2]].
       simpl in *.
       rewrite Hx1 in Hx2.
-      rewrite <- l_in in Hx2; congruence.
+      assert (exists y, chash x = chash y /\ In (y, x') ps) as pf.
+      { exists x; split; auto. }
+      rewrite <- l_in in pf.
+      rewrite H2 in pf.
+      congruence.
     + intros.
       unfold chash_lookup, chash_add.
       destruct (eq_dec (chash x0) (chash x)).
       * rewrite e.
         rewrite lookup_add.
         split; intro.
-        -- apply chash_inj in e; auto.
-           left; congruence.
-        -- destruct H4; [congruence|].
-           rewrite <- l_in in H4; auto.
-           apply chash_inj in e; auto.
-           congruence.
+        -- exists x; split; auto; left; congruence.
+        -- destruct H3 as [x' [Hx'1 Hx'2]].
+           destruct Hx'2 as [|Hx'2]; [congruence|].
+           assert (exists y, chash x = chash y /\ In (y, y0) ps) as pf.
+           { exists x'; split; auto. }
+           rewrite <- l_in in pf.
+           rewrite H2 in pf; discriminate.
       * rewrite lookup_add_neq; auto.
         unfold chash_lookup in l_in.
         rewrite l_in; auto.
-        split; intro; [now right|].
-        destruct H4; auto.
-        congruence.
-Qed.
+        split; intros [x' [Hx'1 Hx'2]].
+        -- exists x'; split; auto; now right.
+        -- destruct Hx'2; [congruence|].
+           exists x'; auto.
+Defined.
 
 Lemma chash_lookup_adds_None_invert {ps} (pps : Forall P (map fst ps)) : forall {m : M Y} {x : X}, P x ->
   chash_lookup x (chash_adds ps m) = None ->
