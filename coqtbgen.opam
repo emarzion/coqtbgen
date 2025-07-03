@@ -21,6 +21,7 @@ depends: [
   "js_of_ocaml-lwt" {>= "5.4.0"}
   "js_of_ocaml-ppx" {>= "5.4.0"}
   "js_of_ocaml-tyxml" {>= "5.4.0"}
+  "yojson" {= "2.1.2"}
   "games"
 ]
 
