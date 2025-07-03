@@ -14,25 +14,27 @@ Require Import Games.Game.Draw.
 Require Import Games.Util.Dec.
 Require Import TBGen.StratSymTB.Closed.
 
-Record OCamlTablebase (G : Game) `{IntHash (GameState G)} : Type := {
+Record OCamlTablebase (G : Game) : Type := {
   tb_whites : OM (Player * nat)%type;
   tb_blacks : OM (Player * nat)%type
   }.
 
-Arguments tb_whites {_} {_} _.
-Arguments tb_blacks {_} {_} _.
+Arguments tb_whites {_} _.
+Arguments tb_blacks {_} _.
 
-Definition query_TB {G} `{IntHash (GameState G)} `{Symmetry G}
+Definition query_TB {G} {P} `{CondIntHash (GameState G) P} `{Symmetry G}
   (tb : OCamlTablebase G) (s : GameState G) : option (Player * nat) :=
   match to_play s with
-  | White => hash_lookup (normalize s) (tb_whites tb)
-  | Black => hash_lookup (normalize s) (tb_blacks tb)
+  | White => chash_lookup (normalize s) (tb_whites tb)
+  | Black => chash_lookup (normalize s) (tb_blacks tb)
   end.
 
 Record CorrectTablebase {M} `{IntMap M}
-  {G} `{IntHash (GameState G)} `{Symmetry G} P (tb : OCamlTablebase G) := {
+  {G} P `{CondIntHash (GameState G) P} `{Symmetry G}
+  (tb : OCamlTablebase G) := {
 
   query_mate : forall s pl n,
+    P s ->
     query_TB tb s = Some (pl, n) ->
     mate pl s n;
 
@@ -47,6 +49,7 @@ Record CorrectTablebase {M} `{IntMap M}
     draw s;
 
   draw_query : forall s,
+    P s ->
     draw s ->
     query_TB tb s = None
 
@@ -57,10 +60,11 @@ Arguments query_draw {_} {_} {_} {_}.
 
 Definition certified_TB
   {M} `{IntMap M}
-  {G} `{IntHash (GameState G)}
+  {G} {P}
+  `{CondIntHash (GameState G) P}
   `{Reversible G}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
-  {P} `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
+  `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   OCamlTablebase G :=
   match TB_final with
   | Build_TB _ _ wps bps _ _ =>
@@ -71,9 +75,9 @@ Definition certified_TB
   end.
 
 Lemma certified_TB_whites {M} `{IntMap M}
-  {G} `{IntHash (GameState G)} `{Reversible G}
+  {G} {P} `{CondIntHash (GameState G) P} `{Reversible G}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
-  {P} `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
+  `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   tb_whites certified_TB = white_positions TB_final.
 Proof.
   unfold certified_TB.
@@ -81,9 +85,9 @@ Proof.
 Qed.
 
 Lemma certified_TB_blacks {M} `{IntMap M}
-  {G} `{IntHash (GameState G)} `{Reversible G}
+  {G} {P} `{CondIntHash (GameState G) P} `{Reversible G}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
-  {P} `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
+  `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   tb_blacks certified_TB = black_positions TB_final.
 Proof.
   unfold certified_TB.
@@ -91,10 +95,10 @@ Proof.
 Qed.
 
 Lemma certified_TB_correct {M} `{IntMap M}
-  {G} `{IntHash (GameState G)}
-  `{Reversible G}
+  {G} {P} `{CondIntHash (GameState G) P}
+  `{Reversible G} `{Discrete  (GameState G)}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
-  {P} `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
+  `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   CorrectTablebase P certified_TB.
 Proof.
   constructor;
