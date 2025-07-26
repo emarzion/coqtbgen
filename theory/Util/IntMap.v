@@ -4,6 +4,8 @@ Import ListNotations.
 Require Import PrimInt63.
 Require Import Uint63.
 
+Require Import Coq.Sorting.Permutation.
+
 Require Import Games.Util.Dec.
 Require Import TBGen.Util.IntHash.
 Require Import TBGen.Util.ListUtil.
@@ -16,20 +18,122 @@ Class IntMap (M : Type -> Type) : Type := {
   empty {X} : M X;
   add {X} : int -> X -> M X -> M X;
   lookup {X} : int -> M X -> option X;
+  to_list {X} : M X -> list (int * X);
   size {X} : M X -> nat;
 
   lookup_empty {X} : forall k, lookup k (empty : M X) = None;
+
   lookup_add {X} : forall k (x : X) m, lookup k (add k x m) = Some x;
   lookup_add_neq {X} : forall k k' (x : X) m, k <> k' ->
     lookup k (add k' x m) = lookup k m;
-  size_empty {X} : size (empty : M X) = 0;
-  size_add {X} : forall k (x : X) m,
-    size (add k x m) =
-      match lookup k m with
-      | Some _ => size m
-      | None => S (size m)
-      end
+
+  to_list_lookup {X} : forall (m : M X) k v, In (k,v) (to_list m) -> lookup k m = Some v;
+  lookup_to_list {X} : forall (m : M X) k v, lookup k m = Some v -> In (k,v) (to_list m);
+
+  to_list_NoDup_keys {X} : forall (m : M X), NoDup (map fst (to_list m));
+
+  size_to_list {X} : forall (m : M X), size m = length (to_list m);
   }.
+
+Lemma to_list_empty {M} `{IntMap M} {X} :
+  to_list (empty : M X) = [].
+Proof.
+  destruct (to_list (empty : M X)) as [|[k v] l] eqn:Heq.
+  - auto.
+  - assert (lookup k empty = Some v) as pf.
+    { apply to_list_lookup.
+      rewrite Heq; now left.
+    }
+    rewrite lookup_empty in pf; discriminate.
+Qed.
+
+Lemma size_empty {M} `{IntMap M} {X} :
+  size (empty : M X) = 0.
+Proof.
+  rewrite size_to_list.
+  rewrite to_list_empty; auto.
+Qed.
+
+Lemma size_add {M} `{IntMap M} {X} :
+  forall k (v : X) m,
+    size (add k v m) =
+    match lookup k m with
+    | Some _ => size m
+    | None => S (size m)
+    end.
+Proof.
+  intros.
+  rewrite size_to_list.
+  destruct lookup eqn:Hlookup.
+  - rewrite size_to_list.
+    do 2 rewrite <- map_length with (f := fst).
+    apply Permutation_length.
+    apply NoDup_Permutation.
+    + apply to_list_NoDup_keys.
+    + apply to_list_NoDup_keys.
+    + intros k'; split; intro pf.
+      * destruct (eqb k k') eqn:Hkeys.
+        -- rewrite eqb_spec in Hkeys; subst.
+           apply lookup_to_list in Hlookup.
+           apply in_map with (f := fst) in Hlookup; auto.
+        -- rewrite eqb_false_spec in Hkeys.
+           rewrite in_map_iff in pf.
+           destruct pf as [[k'' v'] [Hv'1 Hv'2]]; subst.
+           apply to_list_lookup in Hv'2.
+           rewrite lookup_add_neq in Hv'2; auto.
+           apply lookup_to_list in Hv'2.
+           apply in_map; auto.
+      * destruct (eqb k k') eqn:Hkeys.
+        -- rewrite eqb_spec in Hkeys; subst.
+           rewrite in_map_iff.
+           exists (k', v); split; auto.
+           apply lookup_to_list.
+           apply lookup_add.
+        -- rewrite eqb_false_spec in Hkeys.
+           rewrite in_map_iff in *.
+           destruct pf as [[k'' v'] [Hv'1 Hv'2]]; subst.
+           exists (k'', v'); split; auto.
+           apply lookup_to_list.
+           rewrite lookup_add_neq; auto.
+           apply to_list_lookup; auto.
+  - rewrite size_to_list.
+    do 2 rewrite <- map_length with (f := fst).
+    transitivity (length (k :: map fst (to_list m))); auto.
+    apply Permutation_length.
+    apply NoDup_Permutation.
+    + apply to_list_NoDup_keys.
+    + constructor.
+      * intro pf.
+        rewrite in_map_iff in pf.
+        destruct pf as [[k' v'] [pf1 pf2]]; subst.
+        simpl in Hlookup.
+        apply to_list_lookup in pf2; congruence.
+      * apply to_list_NoDup_keys.
+    + intros k'; split; intro pf.
+      * destruct (eqb k k') eqn:Hkeys.
+        -- rewrite eqb_spec in Hkeys; subst.
+           now left.
+        -- rewrite eqb_false_spec in Hkeys.
+           right.
+           rewrite in_map_iff in *.
+           destruct pf as [[k'' v'] [pf1 pf2]]; subst.
+           exists (k'', v'); split; auto.
+           apply to_list_lookup in pf2.
+           rewrite lookup_add_neq in pf2; auto.
+           apply lookup_to_list; auto.
+      * destruct pf as [pf|pf]; subst.
+        -- rewrite in_map_iff.
+           exists (k', v); split; auto.
+           apply lookup_to_list.
+           apply lookup_add.
+        -- rewrite in_map_iff in *.
+           destruct pf as [[k'' v'] [pf1 pf2]].
+           exists (k'', v'); split; auto.
+           apply lookup_to_list.
+           apply to_list_lookup in pf2.
+           rewrite lookup_add_neq; auto.
+           congruence.
+Qed.
 
 Definition hash_add {M} {X Y} `{IntMap M} `{IntHash X} :
   X -> Y -> M Y -> M Y :=
@@ -345,13 +449,16 @@ Global Instance AssocList_SM : IntMap (AL.t int) := {|
   empty X := AL.empty;
   add X := AL.add;
   lookup X := AL.lookup;
+  to_list X := AL.to_list;
   size X := AL.size;
 
   lookup_empty X := AL.lookup_empty;
   lookup_add X := AL.lookup_add;
   lookup_add_neq X := AL.lookup_add_neq;
-  size_empty X := AL.size_empty;
-  size_add X := AL.size_add;
+  to_list_lookup X := AL.to_list_lookup;
+  lookup_to_list X := AL.lookup_to_list;
+  to_list_NoDup_keys X := AL.to_list_NoDup_keys;
+  size_to_list X := AL.size_to_list;
   |}.
 
 Section CondHashFacts.
