@@ -667,7 +667,6 @@ Qed.
 Global Instance Fin_BearGame {G} : FinGame (BearGame G).
 Proof.
   unshelve econstructor.
-  - exact (all_BG_States White ++ all_BG_States Black)%list.
   - intro pl.
     destruct pl eqn:?.
     + refine (filter _ (all_BG_States Black)).
@@ -677,13 +676,6 @@ Proof.
         | _ => false
         end).
     + exact [].
-  - intro s.
-    rewrite in_app_iff.
-    destruct (to_play s) eqn:s_play.
-    + left.
-      now apply all_BG_States_correct.
-    + right.
-      now apply all_BG_States_correct.
   - intros s [] pf; simpl in pf.
     + simpl.
       unfold atomic_res.
