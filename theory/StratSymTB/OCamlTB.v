@@ -62,6 +62,7 @@ Definition certified_TB
   {M} `{IntMap M}
   {G} {P}
   `{CondIntHash (GameState G) P}
+  `{Discrete (GameState G)}
   `{Reversible G}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
   `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
@@ -76,6 +77,7 @@ Definition certified_TB
 
 Lemma certified_TB_whites {M} `{IntMap M}
   {G} {P} `{CondIntHash (GameState G) P} `{Reversible G}
+  `{Discrete (GameState G)}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
   `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   tb_whites certified_TB = white_positions TB_final.
@@ -86,6 +88,7 @@ Qed.
 
 Lemma certified_TB_blacks {M} `{IntMap M}
   {G} {P} `{CondIntHash (GameState G) P} `{Reversible G}
+  `{Discrete (GameState G)}
   `{NiceGame G} `{Symmetry G} `{forall s : GameState G, Discrete (Move s)}
   `{FinPred G P} `{Closed _ P} `{Bisim_closed G auto P} `{Dec1 _ P} :
   tb_blacks certified_TB = black_positions TB_final.

@@ -187,40 +187,6 @@ Fixpoint hash_adds {M} {X Y} `{IntMap M} `{IntHash X}
   | (x,y) :: qs => hash_adds qs (hash_add x y m)
   end.
 
-Inductive good {M} {X Y} `{IntMap M} `{IntHash X} : M Y -> Prop :=
-  | good_e : good empty
-  | good_a {x y m} : good m -> hash_lookup x m = None -> good (hash_add x y m).
-
-Fixpoint good_as {M} {X Y} `{IntMap M} `{IntHash X} {ps : list (X * Y)}
-  {m : M Y} (pf : good m) (nd : NoDup (map fst ps))
-  (disj : forall x y, In (x,y) ps -> hash_lookup x m = None) {struct ps}
-  : good (hash_adds ps m).
-Proof.
-  induction ps as [|[x y] qs].
-  - exact pf.
-  - simpl.
-    apply good_as.
-    + apply good_a; auto.
-      apply (disj x y); now left.
-    + now inversion nd.
-    + intros x' y' HIn.
-      rewrite hash_lookup_add_neq.
-      * apply (disj x' y'); now right.
-      * simpl in nd; inversion nd.
-        intro Heq.
-        apply H3.
-        rewrite <- Heq.
-        rewrite in_map_iff.
-        exists (x', y'); split; auto.
-Qed.
-
-Record map_list_equiv {M} {X Y} `{IntMap M} `{IntHash X}
-  (m : M Y) (ps : list (X * Y)) : Prop := {
-  to_list_size : size m = List.length ps;
-  keys_unique : NoDup (map fst ps);
-  lookup_in {x y} : hash_lookup x m = Some y <-> In (x,y) ps;
-  }.
-
 Lemma hash_adds_add {M} {X Y} `{IntMap M} `{IntHash X}
   {ps : list (X * Y)} : forall x y m,
   hash_add x y (hash_adds ps m) = hash_adds (ps ++ [(x,y)]) m.
@@ -324,48 +290,6 @@ Proof.
         ** intro Hx'x.
            now rewrite Hx'x in n.
 Defined.
-
-Lemma good_to_list {M} {X Y} `{IntHash X} `{IntMap M}
-  (m : M Y) (g : good m) : exists (ps : list (X * Y)), map_list_equiv m ps.
-Proof.
-  induction g.
-  - exists nil; constructor.
-    + now rewrite size_empty.
-    + constructor.
-    + intros x y.
-      unfold hash_lookup.
-      now rewrite lookup_empty.
-  - destruct IHg as [ps [tl_sz key_un l_in]].
-    exists ((x,y) :: ps); constructor.
-    + unfold hash_add.
-      unfold hash_lookup in H1.
-      rewrite size_add.
-      rewrite H1.
-      simpl; congruence.
-    + simpl; constructor; auto.
-      intro HIn.
-      rewrite in_map_iff in HIn.
-      destruct HIn as [[str x'] [Hx1 Hx2]].
-      simpl in *.
-      rewrite Hx1 in Hx2.
-      rewrite <- l_in in Hx2; congruence.
-    + intros.
-      unfold hash_lookup, hash_add.
-      destruct (eq_dec (hash x0) (hash x)).
-      * rewrite e.
-        rewrite lookup_add.
-        split; intro.
-        -- pose (hash_inj _ _ e).
-           left; congruence.
-        -- destruct H2; [congruence|].
-           rewrite <- l_in in H2.
-           pose (hash_inj _ _ e); congruence.
-      * rewrite lookup_add_neq; auto.
-        unfold hash_lookup in l_in.
-        rewrite l_in.
-        split; intro; [now right|].
-        destruct H2; [congruence|auto].
-Qed.
 
 Lemma hash_lookup_adds_None_invert {M} {X Y} `{IntMap M} `{IntHash X}
   {ps} : forall {m : M Y} {x : X},

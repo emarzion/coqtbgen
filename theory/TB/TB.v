@@ -19,10 +19,8 @@ Require Import TBGen.Util.Loop.
 Require Import TBGen.Util.ListUtil.
 
 Class FinGame (G : Game) : Type := {
-  enum_states : list (GameState G);
   enum_wins : Player -> list (GameState G);
 
-  enum_states_correct : forall s, In s enum_states;
   enum_wins_correct1 : forall s pl,
     In s (enum_wins pl) -> atomic_res s = Some (Win pl);
   enum_wins_correct2 : forall s pl,
@@ -209,16 +207,15 @@ Definition TB_step (tb : TB) : TB := {|
     end
   |}.
 
-Definition num_left (tb : TB) : nat :=
-  length enum_states -
-  size (white_positions tb) -
+Definition tb_size (tb : TB) : nat :=
+  size (white_positions tb) +
   size (black_positions tb).
 
-Definition num_left_decr : forall tb,
-  num_left (TB_step tb) <= num_left tb.
+Lemma tb_size_incr (tb : TB) :
+  tb_size tb <= tb_size (TB_step tb).
 Proof.
-  unfold num_left.
-  intros []; simpl.
+  unfold tb_size.
+  destruct tb; simpl.
   unfold add_positions.
   pose proof (hash_size_adds_le
     (map (tag (step_player last_step0 White) curr0) last_white_positions0)
@@ -229,19 +226,21 @@ Proof.
   lia.
 Qed.
 
+Lemma tb_size_bound : exists B, forall tb,
+  tb_size tb <= B.
+Admitted.
+
 Definition TB_loop_data : loop_data TB := {|
-  measure := num_left;
+  measure := tb_size;
   step := TB_step;
-  step_measure := num_left_decr
+  step_measure := tb_size_incr;
+  measure_bound := tb_size_bound;
   |}.
 
 Definition TB_final : TB :=
   loop TB_loop_data TB_init.
 
 Record TB_valid (tb : TB) : Type := {
-
-  white_good : good (white_positions tb);
-  black_good : good (black_positions tb);
 
   mate_tb : forall {s pl n},
     n < curr tb -> mate pl s n ->
@@ -347,8 +346,6 @@ Qed.
 Lemma TB_init_valid : TB_valid TB_init.
 Proof.
   constructor.
-  - constructor.
-  - constructor.
   - simpl.
     intros; lia.
   - intros s pl n Htb.
@@ -529,32 +526,6 @@ Lemma TB_step_valid : forall tb, TB_valid tb
 Proof.
   intros tb v.
   constructor.
-  (* white_good *)
-  - simpl.
-    apply good_as.
-    + apply (white_good _ v).
-    + rewrite map_map.
-      simpl.
-      rewrite map_id.
-      exact (lwp_NoDup _ v).
-    + intros s [pl n] HIn.
-      apply (lwp_disj _ v).
-      rewrite in_map_iff in HIn.
-      destruct HIn as [s' [Hs' ?]].
-      inversion Hs'; congruence.
-  (* black_good *)
-  - simpl.
-    apply good_as.
-    + apply (black_good _ v).
-    + rewrite map_map.
-      simpl.
-      rewrite map_id.
-      exact (lbp_NoDup _ v).
-    + intros s [pl n] HIn.
-      apply (lbp_disj _ v).
-      rewrite in_map_iff in HIn.
-      destruct HIn as [s' [Hs' ?]].
-      inversion Hs'; congruence.
   (* mate_tb *)
   - simpl; intros s pl n n_small sm.
     destruct (le_lt_eq_dec _ _ n_small) as [pf|pf].
@@ -1507,124 +1478,68 @@ Proof.
   lia.
 Qed.
 
-Lemma num_left_lt : forall tb (s : GameState G) pl,
-  mate pl s (curr tb) -> TB_valid tb ->
-  num_left (step TB_loop_data tb) < num_left tb.
+Lemma arith_lemma x y1 y2 z1 z2 :
+  (0 < y1 + y2) ->
+  (z1 + z2 < x) ->
+  x - (y1 + z1) - (y2 + z2) < x - z1 - z2.
 Proof.
-  intros.
-  unfold num_left.
-  simpl.
-  destruct (good_to_list _ (white_good _ X0)) as [ws Hws].
-  destruct (good_to_list _ (black_good _ X0)) as [bs Hbs].
+  lia.
+Qed.
+
+Lemma NoDup_incl_length_lt {X} (l l' : list X) :
+  NoDup l -> incl l l' ->
+  (exists x, In x l' /\ ~ In x l) ->
+  length l < length l'.
+Proof.
+  intros nd inc [x [Hx1 Hx2]].
+  apply in_split in Hx1.
+  destruct Hx1 as [l1 [l2 ?]]; subst.
+  apply PeanoNat.Nat.le_lt_trans with (m := length (l1 ++ l2)).
+  - apply NoDup_incl_length.
+    + auto.
+    + intros y Hy.
+      apply in_or_app.
+      specialize (inc y Hy).
+      apply in_app_or in inc.
+      destruct inc as [pf|pf].
+      * now left.
+      * right.
+        destruct pf.
+        -- congruence.
+        -- auto.
+  - do 2 rewrite app_length; simpl; lia.
+Qed.
+
+Lemma tb_size_gt : forall tb (s : GameState G) pl,
+  mate pl s (curr tb) -> TB_valid tb ->
+  tb_size tb < tb_size (step TB_loop_data tb).
+Proof.
+  intros tb s pl m tb_v.
+  unfold tb_size.
+  simpl white_positions.
+  simpl black_positions.
   unfold add_positions.
-  repeat rewrite hash_size_adds; try
-  (rewrite map_map;
-    unfold tag;
-    simpl;
+  repeat rewrite hash_size_adds; try (
+    rewrite map_map;
+    unfold tag; simpl;
     rewrite map_id).
-  - repeat rewrite map_length.
-    rewrite (to_list_size _ _ Hws).
-    rewrite (to_list_size _ _ Hbs).
-    assert (
-      length (last_white_positions tb) +
-      length (last_black_positions tb) > 0).
-    { destruct (to_play s) eqn:s_play.
-      + assert (In s (last_white_positions tb)).
-        { eapply (mate_lwp _ X0); eauto. }
-        pose (In_length_pos _ _ H5); lia.
-      + assert (In s (last_black_positions tb)).
-        { eapply (mate_lbp _ X0); eauto. }
-        pose (In_length_pos _ _ H5); lia.
-    }
-    assert (
-      length (last_white_positions tb) +
-      length (last_black_positions tb) <=
-      length enum_states - (
-      length ws +
-      length bs)).
-    { repeat rewrite <- app_length.
-      pose (xs := filter (fun s =>
-        negb (in_decb s (map fst (ws ++ bs))))
-        enum_states).
-      apply (PeanoNat.Nat.le_trans _ (length xs)).
-      + unfold xs.
-        apply sublist_length_lemma.
-        * apply NoDup_app; try apply X0.
-          intros s' Hs'w Hs'b.
-          pose (lwp_white _ X0 _ Hs'w).
-          pose (lbp_black _ X0 _ Hs'b).
-          congruence.
-        * intro s'; rewrite in_app_iff.
-          intros [Hw|Hb].
-          -- rewrite filter_In.
-             split; [apply enum_states_correct|].
-             unfold in_decb.
-             destruct in_dec as [pf|]; [|auto].
-             rewrite map_app in pf.
-             rewrite in_app_iff in pf.
-             destruct pf as [pf|pf].
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n']] [? HInw]].
-                simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hws) in HInw.
-                pose (lwp_disj _ X0 _ Hw); congruence.
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n]] [? Hinb]].
-                simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hbs) in Hinb.
-                pose (tb_black _ X0 Hinb).
-                pose (lwp_white _ X0 _ Hw).
-                congruence.
-          -- rewrite filter_In.
-             split; [apply enum_states_correct|].
-             unfold in_decb.
-             destruct in_dec as [pf|]; [|auto].
-             rewrite map_app in pf.
-             rewrite in_app_iff in pf.
-             destruct pf as [pf|pf].
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n]] [? Hinw]].
-                simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hws) in Hinw.
-                pose (tb_white _ X0 Hinw).
-                pose (lbp_black _ X0 _ Hb).
-                congruence.
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n']] [? HInb]].
-                simpl in *; subst.
-                rewrite <- (lookup_in _ _ Hbs) in HInb.
-                pose (lbp_disj _ X0 _ Hb); congruence.
-      + rewrite <- (map_length fst (ws ++ bs)).
-        apply filter_count_lemma.
-        * rewrite map_app.
-          apply NoDup_app; [apply Hws|apply Hbs|].
-          intros x Hxw Hxb.
-          rewrite in_map_iff in Hxw, Hxb.
-          destruct Hxw as [[x' [pl' n']] [? HInw]]; subst.
-          destruct Hxb as [[x'' [pl'' n'']] [? HInb]]; simpl in *; subst.
-          rewrite <- (lookup_in _ _ Hws) in HInw.
-          rewrite <- (lookup_in _ _ Hbs) in HInb.
-          pose (tb_white _ X0 HInw).
-          pose (tb_black _ X0 HInb).
-          congruence.
-        * intros s' _.
-          apply enum_states_correct.
-        * intros y HIn.
-          unfold in_decb.
-          destruct in_dec; [auto|contradiction].
-    }
-    lia.
-  - apply (lbp_NoDup _ X0).
-  - apply (lbp_disj _ X0).
-  - apply (lwp_NoDup _ X0).
-  - apply (lwp_disj _ X0).
+  - do 2 rewrite map_length.
+    destruct (to_play s) eqn:s_play.
+    + apply mate_lwp in m; auto.
+      apply In_length_pos in m; lia.
+    + apply mate_lbp in m; auto.
+      apply In_length_pos in m; lia.
+  - apply (lbp_NoDup _ tb_v).
+  - apply (lbp_disj _ tb_v).
+  - apply (lwp_NoDup _ tb_v).
+  - apply (lwp_disj _ tb_v).
 Qed.
 
 Lemma no_final_curr_mate pl (s : GameState G) :
   mate pl s (curr TB_final) -> False.
 Proof.
   intro sm.
-  pose proof (num_left_lt TB_final s pl sm TB_final_valid).
+  pose proof (tb_size_gt TB_final s pl sm TB_final_valid).
   pose proof (loop_measure TB_loop_data TB_init).
   unfold TB_final in *.
   simpl in *; lia.
@@ -1675,14 +1590,10 @@ Proof.
     pose proof (loop_measure TB_loop_data TB_init) as Hmeasure.
     simpl in Hmeasure.
     rewrite Hk in Hmeasure.
-    unfold num_left in Hmeasure.
+    unfold tb_size in Hmeasure.
     simpl in Hmeasure.
     rewrite size_empty in Hmeasure.
     unfold add_positions in Hmeasure.
-    assert (length enum_states > 0).
-    { apply (In_length_pos _ s).
-      apply enum_states_correct.
-    }
     destruct (to_play s) eqn:s_play.
     + assert (In (s, (Black, 0)) (map (tag Black 0) (nodup IntHash_dec (enum_wins Black)))) as Hs.
       { rewrite in_map_iff.

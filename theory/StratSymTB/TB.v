@@ -90,10 +90,7 @@ Proof.
 Qed.
 
 Class FinPred {G} (P : GameState G -> Prop) : Type := {
-  enum_states : list (GameState G);
   enum_P_wins : Player -> list (GameState G);
-
-  enum_states_correct : forall s, In s enum_states;
   enum_P_wins_correct1 : forall s pl,
     In s (enum_P_wins pl) -> atomic_res s = Some (Win pl);
   enum_P_wins_correct2 : forall s pl,
@@ -458,16 +455,15 @@ Definition TB_step (tb : TB) : TB := {|
     end
   |}.
 
-Definition num_left (tb : TB) : nat :=
-  length enum_states -
-  size (white_positions tb) -
+Definition tb_size (tb : TB) : nat :=
+  size (white_positions tb) +
   size (black_positions tb).
 
-Definition num_left_decr : forall tb,
-  num_left (TB_step tb) <= num_left tb.
+Lemma tb_size_incr (tb : TB) :
+  tb_size tb <= tb_size (TB_step tb).
 Proof.
-  unfold num_left.
-  intros []; simpl.
+  unfold tb_size.
+  destruct tb; simpl.
   unfold add_positions.
   pose proof (chash_size_adds_le
     (map (tag (step_player last_step0 White) curr0) last_white_positions0)
@@ -478,10 +474,15 @@ Proof.
   lia.
 Qed.
 
+Lemma tb_size_bound : exists B, forall tb,
+  tb_size tb <= B.
+Admitted.
+
 Definition TB_loop_data : loop_data TB := {|
-  measure := num_left;
+  measure := tb_size;
   step := TB_step;
-  step_measure := num_left_decr
+  step_measure := tb_size_incr;
+  measure_bound := tb_size_bound;
   |}.
 
 Definition TB_final : TB :=
@@ -2142,155 +2143,42 @@ Proof.
   lia.
 Qed.
 
-Lemma num_left_lt : forall tb (s : GameState G) pl,
+Lemma tb_size_gt : forall tb (s : GameState G) pl,
   P s ->
   mate pl s (curr tb) -> TB_valid tb ->
-  num_left (step TB_loop_data tb) < num_left tb.
+  tb_size tb < tb_size (step TB_loop_data tb).
 Proof.
-  intros.
-  unfold num_left.
-  simpl.
-  destruct (cgood_to_list _ (white_good _ X0)) as [ws Hws].
-  destruct (cgood_to_list _ (black_good _ X0)) as [bs Hbs].
+  intros tb s pl s_p m tb_v.
+  unfold tb_size.
+  simpl white_positions.
+  simpl black_positions.
   unfold add_positions.
-  repeat rewrite chash_size_adds; try
-  (rewrite map_map;
-    unfold tag;
-    simpl;
+  repeat rewrite chash_size_adds; try (
+    rewrite map_map;
+    unfold tag; simpl;
     rewrite map_id).
-  - repeat rewrite map_length.
-    rewrite (cto_list_size _ _ Hws).
-    rewrite (cto_list_size _ _ Hbs).
-    assert (
-      length (last_white_positions tb) +
-      length (last_black_positions tb) > 0).
-    { destruct (to_play s) eqn:s_play.
-      + assert (In (normalize s) (last_white_positions tb)).
-        { eapply (mate_lwp _ X0); eauto. }
-        pose (In_length_pos _ _ H10); lia.
-      + assert (In (normalize s) (last_black_positions tb)).
-        { eapply (mate_lbp _ X0); eauto. }
-        pose (In_length_pos _ _ H10); lia.
-    }
-    assert (
-      length (last_white_positions tb) +
-      length (last_black_positions tb) <=
-      length enum_states - (
-      length ws +
-      length bs)).
-    { repeat rewrite <- app_length.
-      pose (xs := filter (fun s =>
-        negb (in_decb s (map fst (ws ++ bs))))
-        enum_states).
-      apply (PeanoNat.Nat.le_trans _ (length xs)).
-      + unfold xs.
-        apply sublist_length_lemma.
-        * apply NoDup_app; try apply X0.
-          intros s' Hs'w Hs'b.
-          pose (lwp_white _ X0 _ Hs'w).
-          pose (lbp_black _ X0 _ Hs'b).
-          congruence.
-        * intro s'; rewrite in_app_iff.
-          intros [Hw|Hb].
-          -- rewrite filter_In.
-             split; [apply enum_states_correct|].
-             unfold in_decb.
-             destruct in_dec as [pf|]; [|auto].
-             rewrite map_app in pf.
-             rewrite in_app_iff in pf.
-             destruct pf as [pf|pf].
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n']] [? HInw]].
-                simpl in *; subst.
-                assert (chash_lookup s' (white_positions tb) = Some (pl', n')) as pf.
-                { rewrite (clookup_in _ _ Hws).
-                  exists s'; split; auto.
-                }
-                pose (lwp_disj _ X0 _ Hw); congruence.
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n]] [? Hinb]].
-                simpl in *; subst.
-                assert (chash_lookup s' (black_positions tb) = Some (pl', n)) as pf.
-                { rewrite (clookup_in _ _ Hbs).
-                  exists s'; split; auto.
-                }
-                apply tb_black in pf; auto.
-                ** apply lwp_white in Hw; congruence.
-                ** apply lwp_P with (tb := tb); auto.
-          -- rewrite filter_In.
-             split; [apply enum_states_correct|].
-             unfold in_decb.
-             destruct in_dec as [pf|]; [|auto].
-             rewrite map_app in pf.
-             rewrite in_app_iff in pf.
-             destruct pf as [pf|pf].
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n]] [? Hinb]].
-                simpl in *; subst.
-                assert (chash_lookup s' (white_positions tb) = Some (pl', n)) as pf.
-                { rewrite (clookup_in _ _ Hws).
-                  exists s'; split; auto.
-                }
-                apply tb_white in pf; auto.
-                ** apply lbp_black in Hb; congruence.
-                ** apply lbp_P with (tb := tb); auto.
-             ++ rewrite in_map_iff in pf.
-                destruct pf as [[s'' [pl' n']] [? HInw]].
-                simpl in *; subst.
-                assert (chash_lookup s' (black_positions tb) = Some (pl', n')) as pf.
-                { rewrite (clookup_in _ _ Hbs).
-                  exists s'; split; auto.
-                }
-                pose (lbp_disj _ X0 _ Hb); congruence.
-      + rewrite <- (map_length fst (ws ++ bs)).
-        apply filter_count_lemma.
-        * rewrite map_app.
-          apply NoDup_app; [apply Hws|apply Hbs|].
-          intros x Hxw Hxb.
-          rewrite in_map_iff in Hxw, Hxb.
-          destruct Hxw as [[x' [pl' n']] [? HInw]]; subst.
-          destruct Hxb as [[x'' [pl'' n'']] [? HInb]];
-            simpl in *; subst.
-          assert (chash_lookup x' (white_positions tb) = Some (pl', n')).
-          { rewrite (clookup_in _ _ Hws).
-            exists x'; split; auto.
-          }
-          assert (chash_lookup x' (black_positions tb) = Some (pl'', n'')).
-          { rewrite (clookup_in _ _ Hbs).
-            exists x'; split; auto.
-          }
-          assert (P x') as p.
-          { pose proof (all_P _ _ Hws) as pf.
-            rewrite Forall_forall in pf.
-            apply pf.
-            apply in_map with (f := fst) in HInw; auto.
-          }
-          apply tb_white with (tb := tb) in H11; auto.
-          apply tb_black with (tb := tb) in H12; auto.
-          congruence.
-        * intros s' _.
-          apply enum_states_correct.
-        * intros y HIn.
-          unfold in_decb.
-          destruct in_dec; [auto|contradiction].
-    }
-    lia.
-  - apply (lbp_NoDup _ X0).
+  - do 2 rewrite map_length.
+    destruct (to_play s) eqn:s_play.
+    + apply mate_lwp in m; auto.
+      apply In_length_pos in m; lia.
+    + apply mate_lbp in m; auto.
+      apply In_length_pos in m; lia.
+  - apply (lbp_NoDup _ tb_v).
   - rewrite Forall_forall.
-    apply (lbp_P _ X0).
-  - apply (lbp_disj _ X0).
-  - apply (lwp_NoDup _ X0).
+    apply (lbp_P _ tb_v).
+  - apply (lbp_disj _ tb_v).
+  - apply (lwp_NoDup _ tb_v).
   - rewrite Forall_forall.
-    apply (lwp_P _ X0).
-  - apply (lwp_disj _ X0).
-Defined.
+    apply (lwp_P _ tb_v).
+  - apply (lwp_disj _ tb_v).
+Qed.
 
 Lemma no_final_curr_mate pl (s : GameState G) :
   P s ->
   mate pl s (curr TB_final) -> False.
 Proof.
   intros s_p sm.
-  pose proof (num_left_lt TB_final s pl s_p sm TB_final_valid).
+  pose proof (tb_size_gt TB_final s pl s_p sm TB_final_valid).
   pose proof (loop_measure TB_loop_data TB_init).
   unfold TB_final in *.
   simpl in *; lia.
@@ -2342,41 +2230,91 @@ Proof.
     pose proof (loop_measure TB_loop_data TB_init) as Hmeasure.
     simpl in Hmeasure.
     rewrite Hk in Hmeasure.
-    unfold num_left in Hmeasure.
-    simpl in Hmeasure.
+    unfold tb_size in Hmeasure.
+    simpl Nat.iter in Hmeasure.
+    simpl (white_positions TB_init) in Hmeasure.
+    simpl (black_positions TB_init) in Hmeasure.
     rewrite size_empty in Hmeasure.
-    unfold add_positions in Hmeasure.
-    assert (length enum_states > 0).
-    { apply (In_length_pos _ s).
-      apply enum_states_correct.
-    }
+    repeat rewrite size_to_list in Hmeasure.
     destruct (to_play s) eqn:s_play.
-    + assert (forall pf, In (normalize s, (Black, 0)) (map (tag Black 0) (cond_nodup CondIntHash_dec (enum_norm_wins Black) pf))) as Hs.
-      { intro pf.
-        rewrite in_map_iff.
-        exists (normalize s); split; [reflexivity|].
-        rewrite cond_nodup_In.
-        erewrite atomic_win_opp in s_play; [|exact s_res].
-        apply enum_norm_wins_correct2; auto. now destruct pl.
+    + assert (In ((chash (normalize s)),(Black, 0))
+        (to_list (white_positions (TB_step TB_init)))) as pf.
+      { apply lookup_to_list.
+        transitivity (chash_lookup (normalize s) (white_positions (TB_step TB_init)));
+          [reflexivity|].
+        simpl.
+        unfold add_positions.
+        rewrite chash_lookup_adds with (y := (Black, 0)); auto.
+        * unfold functional.
+          intros s' p1 p2 pf1 pf2.
+          rewrite in_map_iff in *.
+          destruct pf1 as [? [eq1 _]].
+          destruct pf2 as [? [eq2 _]].
+          inversion eq1; inversion eq2; auto.
+        * rewrite map_map.
+          rewrite map_id.
+          rewrite Forall_forall.
+          intros s' Hs'.
+          rewrite cond_nodup_In in Hs'.
+          unfold enum_norm_wins in Hs'.
+          rewrite cond_nodup_In in Hs'.
+          rewrite in_map_iff in Hs'.
+          destruct Hs' as [s'' [pf1 pf2]].
+          rewrite <- pf1.
+          apply P_to_Pnorm.
+          pose proof (enum_P_wins_correct3 Black) as pf.
+          rewrite Forall_forall in pf.
+          apply pf; auto.
+        * assert ((normalize s, (Black, 0)) = tag Black 0 (normalize s)) as Heq by reflexivity.
+          rewrite Heq.
+          apply in_map.
+          rewrite cond_nodup_In.
+          apply enum_norm_wins_correct2; auto.
+          rewrite s_res; repeat f_equal.
+          apply atomic_win_opp in s_res.
+          rewrite s_play in s_res.
+          destruct pl; auto; discriminate.
       }
-      exfalso.
-      do 2 rewrite PeanoNat.Nat.sub_0_r in Hmeasure.
-      assert (forall x y z, x > 0 -> y > 0 -> ~ x = x - y - z) as arith by lia.
-      unshelve eapply (arith _ _ _ H9 _ Hmeasure).
-      eapply chash_adds_ne_pos; apply Hs.
-    + assert (forall pf, In (normalize s, (White, 0)) (map (tag White 0) (cond_nodup CondIntHash_dec (enum_norm_wins White) pf))) as Hs.
-      { intro pf.
-        rewrite in_map_iff.
-        exists (normalize s); split; [reflexivity|].
-        rewrite cond_nodup_In.
-        erewrite atomic_win_opp in s_play; [|exact s_res].
-        apply enum_norm_wins_correct2; auto. now destruct pl.
+      apply In_length_pos in pf; lia.
+    + assert (In ((chash (normalize s)),(White, 0))
+        (to_list (black_positions (TB_step TB_init)))) as pf.
+      { apply lookup_to_list.
+        transitivity (chash_lookup (normalize s) (black_positions (TB_step TB_init)));
+          [reflexivity|].
+        simpl.
+        unfold add_positions.
+        rewrite chash_lookup_adds with (y := (White, 0)); auto.
+        * unfold functional.
+          intros s' p1 p2 pf1 pf2.
+          rewrite in_map_iff in *.
+          destruct pf1 as [? [eq1 _]].
+          destruct pf2 as [? [eq2 _]].
+          inversion eq1; inversion eq2; auto.
+        * rewrite map_map.
+          rewrite map_id.
+          rewrite Forall_forall.
+          intros s' Hs'.
+          rewrite cond_nodup_In in Hs'.
+          unfold enum_norm_wins in Hs'.
+          rewrite cond_nodup_In in Hs'.
+          rewrite in_map_iff in Hs'.
+          destruct Hs' as [s'' [pf1 pf2]].
+          rewrite <- pf1.
+          apply P_to_Pnorm.
+          pose proof (enum_P_wins_correct3 White) as pf.
+          rewrite Forall_forall in pf.
+          apply pf; auto.
+        * assert ((normalize s, (White, 0)) = tag White 0 (normalize s)) as Heq by reflexivity.
+          rewrite Heq.
+          apply in_map.
+          rewrite cond_nodup_In.
+          apply enum_norm_wins_correct2; auto.
+          rewrite s_res; repeat f_equal.
+          apply atomic_win_opp in s_res.
+          rewrite s_play in s_res.
+          destruct pl; auto; discriminate.
       }
-      exfalso.
-      do 2 rewrite PeanoNat.Nat.sub_0_r in Hmeasure.
-      assert (forall x y z, x > 0 -> z > 0 -> ~ x = x - y - z) as arith by lia.
-      unshelve eapply (arith _ _ _ H9 _ Hmeasure).
-      eapply chash_adds_ne_pos; apply Hs.
+      apply In_length_pos in pf; lia.
   - intros s pl s_p s_res.
     apply mate_TB_final_lookup; auto.
     exists (atom_win s_res).

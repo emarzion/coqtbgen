@@ -299,31 +299,14 @@ Defined.
 Global Instance Fin_SampleGame : FinGame SampleGame.
 Proof.
   refine ( {|
-    enum_states := [
-      (White, A) : GameState SampleGame;
-      (White, B);
-      (White, C);
-      (White, D);
-      (White, E);
-      (White, F);
-      (Black, A);
-      (Black, B);
-      (Black, C);
-      (Black, D);
-      (Black, E);
-      (Black, F)
-    ];
-
     enum_wins p :=
       match p with
-      | White => [(Black, A)]
+      | White => [(Black, A) : GameState SampleGame]
       | Black => [(White, F)]
       end;
-    enum_states_correct := _;
     enum_wins_correct1 := _;
     enum_wins_correct2 := _;
   |} ).
-  - intros [[] []]; simpl; tauto.
   - intros [[] []] [] []; simpl in *;
       (tauto || discriminate).
   - intros [[] []] [] pf; simpl in *;
