@@ -1,3 +1,4 @@
+Require Import Arith.
 Require Import Lia.
 Require Import List.
 Import ListNotations.
@@ -733,3 +734,17 @@ Proof.
 Qed.
 
 End CondHashFacts.
+
+Lemma NoDup_int_length_bound (l : list int) :
+  NoDup l -> length l <= (2^63).
+Proof.
+Admitted.
+
+Lemma size_bound {M} `{IntMap M} {X} (m : M X) :
+  size m <= (2^63).
+Proof.
+  rewrite size_to_list.
+  rewrite <- map_length with (f := fst).
+  apply NoDup_int_length_bound.
+  apply to_list_NoDup_keys.
+Qed.

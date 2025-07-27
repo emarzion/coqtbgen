@@ -2,6 +2,8 @@ Require Import Lia.
 Require Import List.
 Import ListNotations.
 
+Require Import Arith.
+
 Require Import Compare_dec.
 
 Require Import Games.Util.ListUtil.
@@ -228,7 +230,12 @@ Qed.
 
 Lemma tb_size_bound : exists B, forall tb,
   tb_size tb <= B.
-Admitted.
+Proof.
+  exists (2^63 + 2^63).
+  intro tb.
+  unfold tb_size.
+  apply Nat.add_le_mono; apply size_bound.
+Qed.
 
 Definition TB_loop_data : loop_data TB := {|
   measure := tb_size;
