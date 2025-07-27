@@ -496,9 +496,6 @@ Definition TB_final : TB :=
 
 Record TB_valid (tb : TB) : Type := {
 
-  white_good : cgood (white_positions tb);
-  black_good : cgood (black_positions tb);
-
   mate_tb : forall {s pl n},
     P s -> n < curr tb -> mate pl s n ->
     tb_lookup tb s = Some (pl, n);
@@ -622,8 +619,6 @@ Qed.
 Lemma TB_init_valid : TB_valid TB_init.
 Proof.
   constructor.
-  - constructor.
-  - constructor.
   - simpl.
     intros; lia.
   - intros s pl n p Htb.
@@ -844,42 +839,6 @@ Lemma TB_step_valid : forall tb, TB_valid tb
 Proof.
   intros tb v.
   constructor.
-  (* white_good *)
-  - simpl.
-    apply cgood_as.
-    + apply (white_good _ v).
-    + rewrite map_map.
-      simpl.
-      rewrite map_id.
-      exact (lwp_NoDup _ v).
-    + rewrite map_map.
-      unfold tag; simpl.
-      rewrite map_id.
-      rewrite Forall_forall.
-      apply v.
-    + intros s [pl n] HIn.
-      apply (lwp_disj _ v).
-      rewrite in_map_iff in HIn.
-      destruct HIn as [s' [Hs' ?]].
-      inversion Hs'; congruence.
-  (* black_good *)
-  - simpl.
-    apply cgood_as.
-    + apply (black_good _ v).
-    + rewrite map_map.
-      simpl.
-      rewrite map_id.
-      exact (lbp_NoDup _ v).
-    + rewrite map_map.
-      unfold tag; simpl.
-      rewrite map_id.
-      rewrite Forall_forall.
-      apply v.
-    + intros s [pl n] HIn.
-      apply (lbp_disj _ v).
-      rewrite in_map_iff in HIn.
-      destruct HIn as [s' [Hs' ?]].
-      inversion Hs'; congruence.
   (* mate_tb *)
   - simpl; intros s pl n s_p n_small sm.
     destruct (le_lt_eq_dec _ _ n_small) as [pf|pf].

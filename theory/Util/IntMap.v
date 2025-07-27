@@ -1,4 +1,5 @@
 Require Import Arith.
+Require Import ZArith.
 Require Import Lia.
 Require Import List.
 Import ListNotations.
@@ -443,47 +444,6 @@ Fixpoint chash_adds (ps : list (X * Y)) (m : M Y) {struct ps} : M Y :=
   | (x,y) :: qs => chash_adds qs (chash_add x y m)
   end.
 
-Inductive cgood : M Y -> Prop :=
-  | cgood_e : cgood empty
-  | cgood_a {x y m} : P x -> cgood m -> chash_lookup x m = None -> cgood (chash_add x y m).
-
-Fixpoint cgood_as {ps : list (X * Y)}
-  {m : M Y} (pf : cgood m) (nd : NoDup (map fst ps))
-  (pps : Forall P (map fst ps))
-  (disj : forall x y, In (x,y) ps -> chash_lookup x m = None) {struct ps}
-  : cgood (chash_adds ps m).
-Proof.
-  induction ps as [|[x y] qs].
-  - exact pf.
-  - inversion pps.
-    simpl.
-    apply cgood_as; auto.
-    + apply cgood_a; auto.
-      apply (disj x y); now left.
-    + now inversion nd.
-    + intros x' y' HIn.
-      rewrite chash_lookup_add_neq; auto.
-      * apply (disj x' y'); now right.
-      * simpl in nd; inversion nd.
-        intro Heq.
-        apply H7.
-        rewrite <- Heq.
-        rewrite in_map_iff.
-        exists (x', y'); split; auto.
-      * rewrite Forall_forall in H4.
-        apply H4.
-        apply in_map with (f := fst) in HIn.
-        auto.
-Qed.
-
-Record cmap_list_equiv (m : M Y) (ps : list (X * Y)) : Prop := {
-  cto_list_size : size m = List.length ps;
-  all_P : Forall P (map fst ps);
-  ckeys_unique : NoDup (map fst ps);
-  clookup_in {x y} : chash_lookup x m = Some y <-> exists x',
-    chash x = chash x' /\ In (x',y) ps;
-  }.
-
 Lemma chash_adds_add {ps : list (X * Y)} : forall x y m,
   chash_add x y (chash_adds ps m) = chash_adds (ps ++ [(x,y)]) m.
 Proof.
@@ -600,61 +560,6 @@ Proof.
         rewrite lookup_add_neq in pf; auto.
 Defined.
 
-Lemma cgood_to_list (m : M Y) (g : cgood m) : exists (ps : list (X * Y)),
-  cmap_list_equiv m ps.
-Proof.
-  induction g.
-  - exists nil; constructor.
-    + now rewrite size_empty.
-    + constructor.
-    + constructor.
-    + intros x y.
-      unfold chash_lookup.
-      rewrite lookup_empty.
-      split.
-      * congruence.
-      * intros [? [? []]].
-  - destruct IHg as [ps [tl_sz key_P key_un l_in]].
-    exists ((x,y) :: ps); constructor.
-    + unfold chash_add.
-      unfold chash_lookup in H2.
-      rewrite size_add.
-      rewrite H2.
-      simpl; congruence.
-    + constructor; auto.
-    + simpl; constructor; auto.
-      intro HIn.
-      rewrite in_map_iff in HIn.
-      destruct HIn as [[str x'] [Hx1 Hx2]].
-      simpl in *.
-      rewrite Hx1 in Hx2.
-      assert (exists y, chash x = chash y /\ In (y, x') ps) as pf.
-      { exists x; split; auto. }
-      rewrite <- l_in in pf.
-      rewrite H2 in pf.
-      congruence.
-    + intros.
-      unfold chash_lookup, chash_add.
-      destruct (eq_dec (chash x0) (chash x)).
-      * rewrite e.
-        rewrite lookup_add.
-        split; intro.
-        -- exists x; split; auto; left; congruence.
-        -- destruct H3 as [x' [Hx'1 Hx'2]].
-           destruct Hx'2 as [|Hx'2]; [congruence|].
-           assert (exists y, chash x = chash y /\ In (y, y0) ps) as pf.
-           { exists x'; split; auto. }
-           rewrite <- l_in in pf.
-           rewrite H2 in pf; discriminate.
-      * rewrite lookup_add_neq; auto.
-        unfold chash_lookup in l_in.
-        rewrite l_in; auto.
-        split; intros [x' [Hx'1 Hx'2]].
-        -- exists x'; split; auto; now right.
-        -- destruct Hx'2; [congruence|].
-           exists x'; auto.
-Defined.
-
 Lemma chash_lookup_adds_None_invert {ps} (pps : Forall P (map fst ps)) : forall {m : M Y} {x : X}, P x ->
   chash_lookup x (chash_adds ps m) = None ->
   (~ In x (List.map fst ps)) /\
@@ -735,10 +640,89 @@ Qed.
 
 End CondHashFacts.
 
+Definition to_nat (i : int) : nat :=
+  Z.to_nat (to_Z i).
+
+Lemma to_nat_inj (i j : int) :
+  to_nat i = to_nat j -> i = j.
+Proof.
+  unfold to_nat; intro pf.
+  apply Z2Nat.inj in pf.
+  - apply to_Z_inj; auto.
+  - apply to_Z_bounded.
+  - apply to_Z_bounded.
+Qed.
+
+Lemma to_nat_bound (i : int) :
+  to_nat i < 2^63.
+Proof.
+  unfold to_nat.
+  assert (2^63 = Z.to_nat (2^63)%Z) as pf.
+  { rewrite Z2Nat.inj_pow; try lia.
+    reflexivity.
+  }
+  rewrite pf.
+  rewrite <- Z2Nat.inj_lt.
+  - apply to_Z_bounded.
+  - apply to_Z_bounded.
+  - lia.
+Qed.
+
+Lemma NoDup_nat_length_bound n : forall (l : list nat),
+  NoDup l -> Forall (fun x => x < n) l ->
+  length l <= n.
+Proof.
+  induction n; intros l nd Hl.
+  - destruct l as [|x l'].
+    + simpl; lia.
+    + apply Forall_inv in Hl; lia.
+  - destruct (in_dec n l) as [Hin|Hnin].
+    + apply in_split in Hin.
+      destruct Hin as [l1 [l2 ?]]; subst.
+      rewrite app_length; simpl.
+      rewrite Nat.add_succ_r.
+      apply le_n_S.
+      rewrite <- app_length.
+      apply IHn.
+      * apply NoDup_remove_1 in nd; auto.
+      * apply NoDup_remove_2 in nd.
+        rewrite Forall_forall in *.
+        intros x Hx.
+        assert (x < S n) as pf.
+        { apply Hl.
+          apply in_or_app.
+          apply in_app_or in Hx.
+          destruct Hx.
+          -- now left.
+          -- now right; right.
+        }
+        assert (x <> n) by congruence; lia.
+    + apply le_S.
+      apply IHn; auto.
+      rewrite Forall_forall in *.
+      intros x Hx.
+      specialize (Hl x Hx).
+      inversion Hl.
+      * congruence.
+      * lia.
+Qed.
+
 Lemma NoDup_int_length_bound (l : list int) :
   NoDup l -> length l <= (2^63).
 Proof.
-Admitted.
+  intro nd.
+  rewrite <- map_length with (f := to_nat).
+  apply NoDup_nat_length_bound.
+  - apply FinFun.Injective_map_NoDup.
+    + exact to_nat_inj.
+    + exact nd.
+  - rewrite Forall_forall.
+    intros x Hx.
+    rewrite in_map_iff in Hx.
+    destruct Hx as [i [Hi _]].
+    rewrite <- Hi.
+    apply to_nat_bound.
+Qed.
 
 Lemma size_bound {M} `{IntMap M} {X} (m : M X) :
   size m <= (2^63).
